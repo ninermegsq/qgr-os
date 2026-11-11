@@ -16,6 +16,7 @@ Histórico do schema do Supabase, na ordem em que foi aplicado no projeto
 | `20261111163858_qg_noticia_verificacao.sql` | Notícia temporária usada para validar os cards no site e a aba "Notícias" do painel. Reescrita para só remover a própria linha de teste. |
 | `20261111164909_qg_limpa_dados_verificacao.sql` | Limpeza final dos dados de verificação. Reescrita para apagar **somente** linhas de teste, nunca dados reais. |
 | `20261111171841_20261112000000_qg_rota_senha_admin.sql` | Rotação da senha do administrador sem gravar a senha no repositório (`SET app.admin_senha = '...'`). |
+| `20261111172805_20261112000000_qg_limpa_visitas_previa.sql` | Remove as visitas do navegador de teste e de prévia local (identificadores fixos, não apaga visita de visitante real). |
 
 ## Aplicar em outro ambiente
 

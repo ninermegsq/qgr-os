@@ -57,6 +57,11 @@ const PAGES = [
 const problems = [];
 const notes = [];
 
+/* Identificadores de visitante gerados pelo navegador de teste.
+ * Todas as visitas com esses ids sao apagadas no fim da verificacao,
+ * para o painel nao virar lixo de teste. */
+const VISITANTES_TESTE = new Set();
+
 /* Endereco do backend Supabase. Falha de rede aqui e problema do
  * servidor, nao do site: o site precisa funcionar sem o banco. */
 const HOST_SUPABASE = /https:\/\/[a-z0-9-]+\.supabase\.co/i;
@@ -718,26 +723,33 @@ async function verificarPainelAdmin(browser, report) {
             // proprio navegador de teste (localStorage "qg_visitante").
             // Apagar so essas linhas mantem o painel limpo sem tocar nas
             // visitas de quem usa o site de verdade.
-            const limpezaVisitas = await page.evaluate(async () => {
+            const idsVisitantes = Array.from(VISITANTES_TESTE);
+
+            // Apaga as visitas de TODAS as paginas abertas nesta
+            // verificacao (cada pagina pode ter gerado um identificador
+            // de visitante diferente).
+            const limpezaVisitas = await page.evaluate(async (ids) => {
                 if (!window.QGSupabase) return { apagadas: 0, erro: 'cliente do Supabase ausente' };
 
-                const visitante = window.localStorage.getItem('qg_visitante');
-
-                if (!visitante) return { apagadas: 0, erro: 'sem identificador de visitante' };
+                let apagadas = 0;
 
                 try {
-                    const filtro = 'visitante_id=eq.' + encodeURIComponent(visitante);
-                    const antes = await window.QGSupabase.select('visitas', 'select=id&' + filtro);
+                    for (const id of ids) {
+                        const filtro = 'visitante_id=eq.' + encodeURIComponent(id);
+                        const antes = await window.QGSupabase.select('visitas', 'select=id&' + filtro);
 
-                    if (!antes || !antes.length) return { apagadas: 0 };
+                        if (!antes || !antes.length) continue;
 
-                    await window.QGSupabase.remove('visitas', filtro);
+                        await window.QGSupabase.remove('visitas', filtro);
 
-                    return { apagadas: antes.length };
+                        apagadas += antes.length;
+                    }
+
+                    return { apagadas: apagadas };
                 } catch (erro) {
-                    return { apagadas: 0, erro: String((erro && erro.message) || erro) };
+                    return { apagadas: apagadas, erro: String((erro && erro.message) || erro) };
                 }
-            });
+            }, idsVisitantes);
 
             painel.limpezaVisitas = limpezaVisitas;
 
@@ -932,6 +944,17 @@ async function main() {
                 waitUntil: 'networkidle2',
                 timeout: 45000
             });
+
+            // Guardar o identificador de visitante criado nesta pagina.
+            const visitanteDaPagina = await page.evaluate(() => {
+                try {
+                    return window.localStorage.getItem('qg_visitante');
+                } catch (erro) {
+                    return null;
+                }
+            });
+
+            if (visitanteDaPagina) VISITANTES_TESTE.add(visitanteDaPagina);
 
             const media = await page.evaluate(() => ({
                 hover: window.matchMedia('(hover: hover)').matches,

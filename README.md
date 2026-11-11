@@ -311,6 +311,52 @@ O **único pacote npm** do projeto é o `puppeteer-core`, usado só pela verific
 Ele é `devDependency` e não é necessário para publicar o site — o site publicado não tem
 JavaScript de terceiros, nem requisição extra.
 
+## Repositório no GitHub
+
+O projeto está versionado em **https://github.com/ninermegsq/qgr-os** (branch `main`).
+O repositório é **público**: ele guarda o *código*, nunca senhas.
+
+### Enviar uma alteração
+
+```bash
+git status                 # o que mudou
+git add -A
+git commit -m "descreva a mudança"
+git push origin main
+```
+
+Pelo npm (sem digitar `git`): `npm run git -- status`, `npm run git -- push origin main`.
+E para o GitHub CLI: `npm run gh -- repo view`, `npm run gh -- run list`.
+
+### O que **não** vai para o repositório
+
+O `.gitignore` segura o que é temporário ou secreto:
+
+| Item | Por quê |
+| --- | --- |
+| `node_modules/` | dependências (reinstale com `npm ci`) |
+| `.qg-admin.json` | **credenciais do painel** (e-mail e senha do administrador) |
+| `.env`, `.env.*` | variáveis de ambiente com segredos |
+| `tools/shots/`, `tools/visual-report.json` | capturas da verificação visual |
+| `.netlify/`, `.vercel/`, `.cache/` | temporários de publicação |
+
+> **Regra de ouro:** a senha do painel **nunca** entra no Git. Para criar ou trocar o
+> administrador, use `SET app.admin_senha = '...'` na migration
+> (`supabase/migrations/20261111160027_qg_admin_padrao.sql`) ou a tela de
+> *Authentication → Users* do Supabase.
+
+### Verificação automática
+
+O workflow `.github/workflows/ci.yml` roda `npm run check` em cada push na `main` e em cada
+pull request (badge "Verificacao" no topo do repositório).
+
+Antes de enviar, rode localmente:
+
+```bash
+npm run check:all        # estático + servidor + visual (Chrome headless)
+npm run test:supabase    # integração real com o Supabase
+```
+
 ## Publicação
 
 Site estático: basta subir o conteúdo da pasta para qualquer hospedagem

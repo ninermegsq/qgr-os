@@ -857,6 +857,12 @@ function observarCliques() {
  * Seção de notícias
  * ------------------------------------------------------------------ */
 
+/* Quantas notícias entram por página na página de notícias */
+const NOTICIAS_POR_PAGINA = 9;
+
+/* Quantas já foram carregadas (paginação do botão "carregar mais") */
+let noticiasCarregadas = 0;
+
 function urlSegura(valor) {
     const texto = String(valor || '').trim();
     if (!/^https?:\/\//i.test(texto)) return '';
@@ -988,35 +994,72 @@ function criarCardNoticia(noticia) {
     return card;
 }
 
-function carregarNoticias() {
+function carregarNoticias(acrescentar) {
     const grade = document.getElementById('newsGrid');
-    if (!grade) return;
+    if (!grade) return Promise.resolve([]);
+
+    const botaoMais = document.getElementById('newsMais');
+    const continuar = acrescentar === true;
 
     if (!SUPABASE_ATIVO) {
-        mostrarAvisoNoticias('As notícias do agronegócio entram no ar em breve.');
-        return;
+        if (!continuar) mostrarAvisoNoticias('As notícias do agronegócio entram no ar em breve.');
+        if (botaoMais) botaoMais.hidden = true;
+        return Promise.resolve([]);
     }
 
     const consulta = 'select=id,titulo,resumo,categoria,fonte,url,imagem_url,publicado_em,destaque' +
-        '&publicado=eq.true&order=destaque.desc,publicado_em.desc&limit=6';
+        '&publicado=eq.true&order=destaque.desc,publicado_em.desc' +
+        '&limit=' + NOTICIAS_POR_PAGINA + '&offset=' + (continuar ? noticiasCarregadas : 0);
 
-    SUPABASE.select('noticias', consulta)
+    return SUPABASE.select('noticias', consulta)
         .then(linhas => {
             const lista = Array.isArray(linhas) ? linhas : [];
 
-            limparElemento(grade);
-
-            if (!lista.length) {
-                mostrarAvisoNoticias('Nenhuma notícia publicada no momento.');
-                return;
+            if (!continuar) {
+                limparElemento(grade);
+                noticiasCarregadas = 0;
             }
 
-            lista.forEach(noticia => grade.appendChild(criarCardNoticia(noticia)));
+            if (!lista.length) {
+                if (!continuar) mostrarAvisoNoticias('Nenhuma notícia publicada no momento.');
+            } else {
+                lista.forEach(noticia => grade.appendChild(criarCardNoticia(noticia)));
+                noticiasCarregadas += lista.length;
+            }
+
+            // O botão só aparece quando ainda há notícias para carregar
+            if (botaoMais) {
+                botaoMais.hidden = lista.length < NOTICIAS_POR_PAGINA;
+                botaoMais.disabled = false;
+                botaoMais.textContent = 'Carregar mais notícias';
+            }
+
+            return lista;
         })
         .catch(erro => {
             console.warn('Q GRAOS: não foi possível carregar as notícias.', erro && erro.message);
-            mostrarAvisoNoticias('Não foi possível carregar as notícias agora.');
+
+            if (!continuar) mostrarAvisoNoticias('Não foi possível carregar as notícias agora.');
+
+            if (botaoMais) {
+                botaoMais.disabled = false;
+                botaoMais.textContent = 'Tentar de novo';
+            }
+
+            return [];
         });
+}
+
+/* Botão "carregar mais" (só existe na página de notícias) */
+function prepararBotaoMaisNoticias() {
+    const botao = document.getElementById('newsMais');
+    if (!botao) return;
+
+    botao.addEventListener('click', () => {
+        botao.disabled = true;
+        botao.textContent = 'Carregando…';
+        carregarNoticias(true);
+    });
 }
 
 /* ---------- Partida ---------- */
@@ -1024,6 +1067,7 @@ function carregarNoticias() {
 prepararAnalytics();
 observarSecoes();
 observarCliques();
+prepararBotaoMaisNoticias();
 carregarNoticias();
 registrarEvento('pageview');
 reenviarLeadsPendentes();

@@ -30,16 +30,27 @@ const config = readSiteConfig();
 const siteUrl = String(config.siteUrl || 'https://qgraos.com.br/').replace(/\/*$/, '/');
 const today = new Date().toISOString().slice(0, 10);
 
+/* Paginas publicas do site. A pagina de noticias entra separada:
+   ela tem conteudo proprio e muda toda vez que ha publicacao nova. */
+const PAGINAS = [
+    { loc: siteUrl, changefreq: 'monthly', priority: '1.0' },
+    { loc: siteUrl + 'noticias.html', changefreq: 'daily', priority: '0.8' }
+];
+
+const urls = PAGINAS.map(pagina => (
+    '  <url>\n' +
+    '    <loc>' + pagina.loc + '</loc>\n' +
+    '    <lastmod>' + today + '</lastmod>\n' +
+    '    <changefreq>' + pagina.changefreq + '</changefreq>\n' +
+    '    <priority>' + pagina.priority + '</priority>\n' +
+    '  </url>\n'
+)).join('');
+
 const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    '  <url>\n' +
-    '    <loc>' + siteUrl + '</loc>\n' +
-    '    <lastmod>' + today + '</lastmod>\n' +
-    '    <changefreq>monthly</changefreq>\n' +
-    '    <priority>1.0</priority>\n' +
-    '  </url>\n' +
+    urls +
     '</urlset>\n';
 
 fs.writeFileSync(path.join(ROOT, 'sitemap.xml'), xml, 'utf8');
 
-console.log('sitemap.xml gerado: ' + siteUrl + ' (lastmod ' + today + ')');
+console.log('sitemap.xml gerado: ' + PAGINAS.length + ' pagina(s) (lastmod ' + today + ')');

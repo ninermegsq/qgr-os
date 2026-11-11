@@ -1104,7 +1104,8 @@ footer {
 
     .section-header h2,
     .history-content h2,
-    .contact-info h2 {
+    .contact-info h2,
+    .news-teaser h2 {
         font-size: 2rem;
     }
 
@@ -1130,40 +1131,12 @@ footer {
 }
 
 /* ==================================================================
- * Botão de WhatsApp na barra de navegação
+ * Área à direita da navegação (logo + links + menu do celular)
  * ================================================================== */
 .nav-right {
     display: flex;
     align-items: center;
     gap: 20px;
-}
-
-.nav-whatsapp {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 18px;
-    background: var(--gradient-gold);
-    color: var(--primary-color);
-    font-weight: 700;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-    transition: var(--transition);
-    white-space: nowrap;
-}
-
-.nav-whatsapp .ic {
-    width: 1.15rem;
-    height: 1.15rem;
-    font-size: 1.15rem;
-}
-
-.nav-whatsapp:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
 }
 
 /* ==================================================================
@@ -1291,6 +1264,161 @@ footer {
 }
 
 /* ==================================================================
+ * Página de notícias (noticias.html)
+ * ================================================================== */
+
+/* A navbar é fixa: o conteúdo começa abaixo dela */
+.page-noticias {
+    padding-top: var(--navbar-height);
+}
+
+.news-hero {
+    padding: 70px 0 10px;
+    background: var(--bg-light);
+}
+
+.news-hero-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--gradient-green);
+    color: var(--secondary-color);
+    margin-bottom: 18px;
+}
+
+.news-hero-mark .ic {
+    width: 30px;
+    height: 30px;
+}
+
+.news-hero h1 {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    line-height: 1.15;
+    color: var(--primary-color);
+    max-width: 780px;
+}
+
+.news-hero .highlight {
+    color: var(--gold-text);
+}
+
+.news-hero-texto {
+    color: #555;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    max-width: 640px;
+    margin-top: 14px;
+}
+
+.news-hero-links {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    flex-wrap: wrap;
+    margin-top: 26px;
+}
+
+.news-hero-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.news-hero-link:hover {
+    color: var(--gold-text);
+}
+
+.news-hero-link .ic {
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+.news-page {
+    padding-top: 60px;
+}
+
+.news-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 45px;
+}
+
+.news-more {
+    display: inline-block;
+    padding: 12px 30px;
+    background: var(--gradient-gold);
+    color: var(--primary-color);
+    font-family: inherit;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transition: var(--transition);
+}
+
+/* O atributo hidden precisa vencer o display do botão */
+.news-more[hidden] {
+    display: none;
+}
+
+.news-more:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+
+.news-more:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+/* ==================================================================
+ * Chamada das notícias na página inicial
+ * (a lista completa fica em noticias.html)
+ * ================================================================== */
+.news-teaser {
+    text-align: center;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.news-teaser h2 {
+    font-size: 3rem;
+    color: var(--primary-color);
+    margin-bottom: 18px;
+}
+
+.news-teaser .highlight {
+    color: var(--gold-text);
+}
+
+.news-teaser-texto {
+    color: #555;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    margin-bottom: 28px;
+}
+
+.news-teaser .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.news-teaser .btn-primary .ic {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+/* ==================================================================
  * Formulário: consentimento (LGPD) e campo isca anti-spam
  * ================================================================== */
 .check-label {
@@ -1343,15 +1471,6 @@ footer {
         gap: 14px;
     }
 
-    /* No celular fica só o ícone do WhatsApp, como no desenho de referência */
-    .nav-whatsapp {
-        padding: 9px 12px;
-    }
-
-    .nav-whatsapp-text {
-        display: none;
-    }
-
     .news {
         padding: 70px 0;
     }
@@ -1359,5 +1478,13 @@ footer {
     .news-grid {
         grid-template-columns: 1fr;
         margin-top: 35px;
+    }
+
+    .news-hero {
+        padding: 45px 0 5px;
+    }
+
+    .news-page {
+        padding-top: 45px;
     }
 }

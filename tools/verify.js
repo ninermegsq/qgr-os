@@ -39,6 +39,7 @@ function exists(relativePath) {
 /* ---------- 1. Arquivos obrigatorios ---------- */
 const REQUIRED_FILES = [
     'index.html',
+    'noticias.html',
     '404.html',
     'style.css',
     'script.js',
@@ -134,7 +135,7 @@ notes.push('Nenhum script de CDN: apenas arquivos locais');
 notes.push('site.config.js carregado antes de script.js');
 
 /* ---------- 5. Referencias locais existem no disco ---------- */
-const HTML_FILES = ['index.html', '404.html'];
+const HTML_FILES = ['index.html', 'noticias.html', '404.html'];
 let localReferences = 0;
 
 HTML_FILES.forEach(file => {
@@ -184,17 +185,27 @@ notes.push(anchors + ' ancoras internas verificadas');
 const symbolPattern = /<symbol[^>]+id="([^"]+)"/g;
 const symbols = new Set();
 let match;
-
-while ((match = symbolPattern.exec(html)) !== null) symbols.add(match[1]);
-
-const usePattern = /<use[^>]+href="#([^"]+)"/g;
 let uses = 0;
-while ((match = usePattern.exec(html)) !== null) {
-    uses++;
-    if (!symbols.has(match[1])) {
-        errors.push('Icone SVG inexistente no sprite: #' + match[1]);
+
+HTML_FILES.forEach(file => {
+    const content = read(file);
+    const doSprite = new Set();
+    const usePattern = /<use[^>]+href="#([^"]+)"/g;
+
+    let simbolo;
+    while ((simbolo = symbolPattern.exec(content)) !== null) {
+        doSprite.add(simbolo[1]);
+        symbols.add(simbolo[1]);
     }
-}
+
+    let uso;
+    while ((uso = usePattern.exec(content)) !== null) {
+        uses++;
+        if (!doSprite.has(uso[1])) {
+            errors.push('Icone SVG inexistente no sprite de ' + file + ': #' + uso[1]);
+        }
+    }
+});
 notes.push(symbols.size + ' icones no sprite, ' + uses + ' usos conferidos');
 
 /* ---------- 8. Redes sociais desativadas ---------- */
@@ -281,12 +292,20 @@ notes.push('script.js sem dependencias externas');
 /* ---------- 13. Chaves de configuracao usadas no HTML ---------- */
 const configKeys = new Set();
 const configPattern = /data-config(?:-text)?="([^"]+)"/g;
-while ((match = configPattern.exec(html)) !== null) {
-    configKeys.add(match[1]);
-    if (!KNOWN_CONFIG_KEYS.includes(match[1])) {
-        errors.push('Chave de configuracao desconhecida no HTML: "' + match[1] + '"');
+
+HTML_FILES.forEach(file => {
+    const content = read(file);
+    const padrao = new RegExp(configPattern.source, 'g');
+    let achado;
+
+    while ((achado = padrao.exec(content)) !== null) {
+        configKeys.add(achado[1]);
+        if (!KNOWN_CONFIG_KEYS.includes(achado[1])) {
+            errors.push('Chave de configuracao desconhecida em ' + file + ': "' + achado[1] + '"');
+        }
     }
-}
+});
+
 if (!configKeys.has('whatsapp')) errors.push('HTML sem nenhum link de WhatsApp com data-config');
 if (!configKeys.has('year')) errors.push('HTML sem o ano dinamico (data-config="year")');
 notes.push(configKeys.size + ' chaves de configuracao aplicadas no HTML');
@@ -345,14 +364,39 @@ const seoRequired = [
     { pattern: /<script[^>]+type="application\/ld\+json"/, label: 'JSON-LD' }
 ];
 
-seoRequired.forEach(item => {
-    if (!item.pattern.test(html)) errors.push('SEO: falta ' + item.label + ' no <head>');
+// A pagina inicial e a de noticias precisam de SEO completo
+const PAGINAS_SEO = ['index.html', 'noticias.html'];
+
+PAGINAS_SEO.forEach(file => {
+    const content = read(file);
+
+    seoRequired.forEach(item => {
+        if (!item.pattern.test(content)) {
+            errors.push('SEO em ' + file + ': falta ' + item.label + ' no <head>');
+        }
+    });
+
+    // O JSON-LD deve citar os dados de contato
+    if (content.includes('application/ld+json')) {
+        if (!content.includes(String(config.cnpj))) {
+            errors.push('SEO em ' + file + ': JSON-LD sem o CNPJ do site.config.js');
+        }
+        if (!content.includes(String(config.email))) {
+            errors.push('SEO em ' + file + ': JSON-LD sem o e-mail do site.config.js');
+        }
+    }
 });
 
-// O JSON-LD deve citar os dados de contato
-if (html.includes('application/ld+json')) {
-    if (!html.includes(String(config.cnpj))) errors.push('JSON-LD sem o CNPJ do site.config.js');
-    if (!html.includes(String(config.email))) errors.push('JSON-LD sem o e-mail do site.config.js');
+// O canonical de cada pagina tem de apontar para a propria URL
+const canonicalPattern = /<link[^>]+rel="canonical"[^>]+href="([^"]+)"/;
+const canonicalIndex = canonicalPattern.exec(html);
+const canonicalNoticias = canonicalPattern.exec(read('noticias.html'));
+
+if (!canonicalIndex || canonicalIndex[1] !== 'https://qgraos.com.br/') {
+    errors.push('index.html sem o canonical https://qgraos.com.br/');
+}
+if (!canonicalNoticias || canonicalNoticias[1] !== 'https://qgraos.com.br/noticias.html') {
+    errors.push('noticias.html sem o canonical https://qgraos.com.br/noticias.html');
 }
 notes.push('SEO: canonical, Open Graph, Twitter Card e JSON-LD presentes');
 
@@ -469,10 +513,28 @@ if (apiScriptIndex !== -1 && scriptIndex !== -1 && apiScriptIndex > scriptIndex)
     errors.push('supabase-api.js precisa ser carregado ANTES de script.js');
 }
 
-// Secao de noticias no site
+// As noticias tem pagina propria: a lista fica em noticias.html
+const noticiasHtml = read('noticias.html');
+
 if (!/id="noticias"/.test(html)) errors.push('index.html sem a secao #noticias');
-if (!/id="newsGrid"/.test(html)) errors.push('index.html sem o container #newsGrid');
-if (!/class="nav-whatsapp"/.test(html)) errors.push('index.html sem o botao de WhatsApp na navegacao (.nav-whatsapp)');
+if (/id="newsGrid"/.test(html)) {
+    errors.push('index.html nao deve mais ter a grade de noticias (ela fica em noticias.html)');
+}
+if (!/id="newsGrid"/.test(noticiasHtml)) errors.push('noticias.html sem o container #newsGrid');
+if (!/id="newsMais"/.test(noticiasHtml)) errors.push('noticias.html sem o botao de carregar mais (#newsMais)');
+if (!/href="noticias\.html"/.test(html)) errors.push('index.html sem link para a pagina de noticias');
+if (!/href="noticias\.html"/.test(noticiasHtml)) errors.push('noticias.html sem link para a propria pagina de noticias');
+
+// O botao de WhatsApp nao volta para o cabecalho
+if (/class="nav-whatsapp"/.test(html)) {
+    errors.push('index.html ainda tem o botao de WhatsApp na navegacao (.nav-whatsapp)');
+}
+if (/class="nav-whatsapp"/.test(noticiasHtml)) {
+    errors.push('noticias.html ainda tem o botao de WhatsApp na navegacao (.nav-whatsapp)');
+}
+if (/\.nav-whatsapp/.test(css)) {
+    errors.push('style.css ainda tem regras do botao de WhatsApp da navegacao (.nav-whatsapp)');
+}
 
 // Consentimento (LGPD) e campo isca anti-spam
 if (!/id="consentimento"/.test(html)) {

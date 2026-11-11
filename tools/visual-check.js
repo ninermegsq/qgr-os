@@ -50,6 +50,7 @@ const VIEWPORTS = [
 
 const PAGES = [
     { name: 'home', url: '/' },
+    { name: 'noticias', url: '/noticias.html' },
     { name: '404', url: '/404.html' },
     { name: 'admin', url: '/admin/' }
 ];
@@ -393,7 +394,6 @@ function auditDom() {
         '.cta-box p',
         '.products-footer p',
         '.stat-item h3',
-        '.nav-whatsapp',
         '.news-category',
         '.news-date',
         '.news-card h3',
@@ -482,6 +482,8 @@ function auditDom() {
     const newsGrid = document.getElementById('newsGrid');
     const navWhatsapp = document.querySelector('.nav-whatsapp');
     const newsEmpty = newsGrid ? newsGrid.querySelector('.news-empty') : null;
+    const botaoMais = document.getElementById('newsMais');
+    const linkNoticias = document.querySelector('a[href="noticias.html"]');
 
     result.news = {
         sectionExists: !!document.getElementById('noticias'),
@@ -490,7 +492,10 @@ function auditDom() {
         emptyMessage: newsEmpty ? (newsEmpty.textContent || '').trim().slice(0, 80) : '',
         navWhatsappExists: !!navWhatsapp,
         navWhatsappVisible: navWhatsapp ? navWhatsapp.getBoundingClientRect().width > 0 : false,
-        navWhatsappHref: navWhatsapp ? (navWhatsapp.getAttribute('href') || '') : ''
+        navWhatsappHref: navWhatsapp ? (navWhatsapp.getAttribute('href') || '') : '',
+        linkParaPaginaDeNoticias: !!linkNoticias,
+        botaoMaisExiste: !!botaoMais,
+        botaoMaisVisivel: botaoMais ? botaoMais.getBoundingClientRect().width > 0 : false
     };
 
     /* ---------- Foco visivel no teclado ---------- */
@@ -946,12 +951,23 @@ async function main() {
             });
 
             // Guardar o identificador de visitante criado nesta pagina.
-            const visitanteDaPagina = await page.evaluate(() => {
-                try {
-                    return window.localStorage.getItem('qg_visitante');
-                } catch (erro) {
-                    return null;
+            // O script.js roda adiado (defer): a leitura pode acontecer
+            // antes de ele gravar o id, entao a espera e repetida.
+            const visitanteDaPagina = await page.evaluate(async () => {
+                const deadline = Date.now() + 5000;
+
+                while (Date.now() < deadline) {
+                    try {
+                        const id = window.localStorage.getItem('qg_visitante');
+                        if (id) return id;
+                    } catch (erro) {
+                        return null;
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 150));
                 }
+
+                return null;
             });
 
             if (visitanteDaPagina) VISITANTES_TESTE.add(visitanteDaPagina);
@@ -1316,17 +1332,33 @@ async function main() {
                     report.problems.push(label + ': campo isca anti-spam estava preenchido');
                 }
             }
-            // A secao de noticias e o botao de WhatsApp so existem na pagina inicial
+            // A home guarda so o convite para a pagina de noticias e
+            // nao pode ter o botao de WhatsApp no cabecalho
             if (target.name === 'home') {
                 if (!dom.news.sectionExists) {
                     report.problems.push(label + ': secao #noticias ausente');
                 }
-                if (!dom.news.navWhatsappExists) {
-                    report.problems.push(label + ': botao de WhatsApp da navegacao ausente');
-                } else if (!dom.news.navWhatsappVisible) {
-                    report.problems.push(label + ': botao de WhatsApp da navegacao esta invisivel');
-                } else if (dom.news.navWhatsappHref.indexOf('wa.me/') === -1) {
-                    report.problems.push(label + ': botao de WhatsApp da navegacao sem link wa.me');
+                if (dom.news.gridExists) {
+                    report.problems.push(label + ': a grade de noticias nao deve ficar na pagina inicial');
+                }
+                if (!dom.news.linkParaPaginaDeNoticias) {
+                    report.problems.push(label + ': sem link para a pagina de noticias');
+                }
+                if (dom.news.navWhatsappExists) {
+                    report.problems.push(label + ': botao de WhatsApp da navegacao presente');
+                }
+            }
+
+            // A pagina de noticias e a unica com a lista de noticias
+            if (target.name === 'noticias') {
+                if (!dom.news.gridExists) {
+                    report.problems.push(label + ': container #newsGrid ausente na pagina de noticias');
+                }
+                if (!dom.news.botaoMaisExiste) {
+                    report.problems.push(label + ': botao de carregar mais ausente na pagina de noticias');
+                }
+                if (dom.news.navWhatsappExists) {
+                    report.problems.push(label + ': botao de WhatsApp da navegacao presente');
                 }
             }
 

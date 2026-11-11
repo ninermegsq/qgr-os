@@ -131,7 +131,7 @@ const expected = {
 
 const applyFunction = extractApplyFunction(read('script.js'));
 
-['index.html', '404.html'].forEach(file => {
+['index.html', 'noticias.html', '404.html'].forEach(file => {
     const html = read(file);
     const elements = extractConfiguredElements(html);
 

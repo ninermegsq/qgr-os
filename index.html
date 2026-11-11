@@ -67,7 +67,7 @@
 
     <!-- Styles locais: carregam primeiro e o site funciona mesmo sem internet.
          O "?v=" evita que o navegador use uma versão antiga em cache. -->
-    <link rel="stylesheet" href="style.css?v=10">
+    <link rel="stylesheet" href="style.css?v=11">
 
     <!-- Favicon em SVG inline: evita requisição extra e erro 404 -->
     <link rel="icon"
@@ -192,18 +192,10 @@
                     <a href="#about">Sobre</a>
                     <a href="#services">Serviços</a>
                     <a href="#products">Produtos</a>
-                    <a href="#noticias">Notícias</a>
+                    <a href="noticias.html">Notícias</a>
                     <a href="#contact">Contato</a>
                 </div>
-                <!-- Botão de WhatsApp na barra de navegação (versão mobile: só o ícone) -->
-                <a href="https://wa.me/5566992281757" class="nav-whatsapp" data-config="whatsapp"
-                    target="_blank" rel="noopener noreferrer" aria-label="Falar com a Q GRÃOS no WhatsApp">
-                    <svg class="ic" aria-hidden="true" focusable="false">
-                        <use href="#ic-whatsapp"></use>
-                    </svg>
-                    <span class="nav-whatsapp-text">WhatsApp</span>
-                </a>
-                    <button class="hamburger" type="button" aria-label="Abrir menu" aria-expanded="false"
+                <button class="hamburger" type="button" aria-label="Abrir menu" aria-expanded="false"
                     aria-controls="navLinks">
                     <span></span>
                     <span></span>
@@ -494,17 +486,21 @@
         </div>
     </section>
 
-    <!-- News Section (conteúdo vindo do Supabase) -->
+    <!-- Notícias: a lista tem página própria (noticias.html).
+         Aqui na home fica só o convite para abrir ela — a grade de
+         notícias não aparece mais junto das informações da Q GRÃOS. -->
     <section id="noticias" class="news">
         <div class="container">
-            <div class="section-header" data-aos="fade-up">
+            <div class="news-teaser" data-aos="fade-up">
                 <span class="section-tag">Notícias do Agro</span>
                 <h2>O que está <span class="highlight">Movimentando</span> o Agronegócio</h2>
-                <p>Grãos, safra, frete e preços: o que importa para quem compra e vende carga</p>
-            </div>
-
-            <div class="news-grid" id="newsGrid" aria-live="polite">
-                <p class="news-empty" id="newsEmpty">Carregando as últimas notícias do agronegócio…</p>
+                <p class="news-teaser-texto">Grãos, safra, frete e preços: as últimas do agronegócio, publicadas
+                    pela nossa equipe na página de notícias.</p>
+                <a href="noticias.html" class="btn-primary">Ver todas as notícias
+                    <svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#ic-arrow-right"></use>
+                    </svg>
+                </a>
             </div>
         </div>
     </section>
@@ -658,7 +654,7 @@
                         <li><a href="#products"><svg class="ic" aria-hidden="true" focusable="false">
                                 <use href="#ic-chevron-right"></use>
                             </svg> Produtos</a></li>
-                        <li><a href="#noticias"><svg class="ic" aria-hidden="true" focusable="false">
+                        <li><a href="noticias.html"><svg class="ic" aria-hidden="true" focusable="false">
                                 <use href="#ic-chevron-right"></use>
                             </svg> Notícias</a></li>
                         <li><a href="#contact"><svg class="ic" aria-hidden="true" focusable="false">
@@ -691,7 +687,7 @@
          O "?v=" evita que o navegador use uma versão antiga em cache. -->
     <script src="site.config.js?v=1" defer></script>
     <script src="supabase-api.js?v=1" defer></script>
-    <script src="script.js?v=7" defer></script>
+    <script src="script.js?v=8" defer></script>
 </body>
 
 </html>

@@ -17,6 +17,10 @@ Histórico do schema do Supabase, na ordem em que foi aplicado no projeto
 | `20261111164909_qg_limpa_dados_verificacao.sql` | Limpeza final dos dados de verificação. Reescrita para apagar **somente** linhas de teste, nunca dados reais. |
 | `20261111171841_20261112000000_qg_rota_senha_admin.sql` | Rotação da senha do administrador sem gravar a senha no repositório (`SET app.admin_senha = '...'`). |
 | `20261111172805_20261112000000_qg_limpa_visitas_previa.sql` | Remove as visitas do navegador de teste e de prévia local (identificadores fixos, não apaga visita de visitante real). |
+| `20261111174500_qg_limpa_visitas_teste_visual.sql` | Remove as visitas deixadas pela verificação visual (identificadores fixos do navegador de teste). |
+| `20261111175320_qg_noticias_teste_paginacao.sql` | 10 notícias temporárias (`https://exemplo.test/%`) usadas para validar a paginação da página `noticias.html`. Sempre acompanhadas da limpeza abaixo. |
+| `20261111175437_qg_limpa_noticias_teste_paginacao.sql` | Apaga as notícias de teste da paginação (`url LIKE 'https://exemplo.test/%'`). Não toca em notícia real. |
+| `20261111175655_20261111180000_qg_limpa_visitas_teste_paginacao_sql.sql` | Remove as visitas do teste de paginação (visitante fixo do navegador de teste). |
 
 ## Aplicar em outro ambiente
 

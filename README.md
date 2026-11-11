@@ -61,8 +61,10 @@ Roda `node --check` no JavaScript e o verificador `tools/verify.js`, que confere
 - **presença de SEO**: canonical, Open Graph, Twitter Card e JSON-LD;
 - campos do formulário com `name`/`autocomplete`, os **selects de qualificação** (perfil e
   o que o cliente busca), a **caixa de consentimento (LGPD)** e o **campo isca anti-spam**;
-- **integração com o Supabase**: seção `#noticias`, botão de WhatsApp na navegação, cliente
-  `supabase-api.js`, painel `/admin` com `noindex` e migration com RLS + RPC `SECURITY DEFINER`;
+- **integração com o Supabase**: página de notícias `noticias.html` (com grade `#newsGrid` e
+  botão "carregar mais"), **ausência do botão de WhatsApp na navegação** (`.nav-whatsapp` não
+  pode voltar), cliente `supabase-api.js`, painel `/admin` com `noindex` e migration com RLS +
+  RPC `SECURITY DEFINER`;
 - **nenhuma chave secreta** (`service_role` / `sb_secret_`) em nenhum arquivo do projeto;
 - `robots.txt` e `sitemap.xml` consistentes com a URL do site.
 
@@ -112,7 +114,8 @@ npm install     # instala o puppeteer-core (só isso; não baixa navegador)
 npm run visual
 ```
 
-O que ele verifica, em `/`, `/404.html` e `/admin/`, nos tamanhos **1440×900**, **390×844** e **360×740**:
+O que ele verifica, em `/`, `/noticias.html`, `/404.html` e `/admin/`, nos tamanhos
+**1440×900**, **390×844** e **360×740**:
 
 - erros de console, exceções da página, requisições falhas e respostas HTTP ≥ 400;
 - rolagem horizontal (conteúdo mais largo que a tela) e elementos fora da viewport;
@@ -126,7 +129,8 @@ O que ele verifica, em `/`, `/404.html` e `/admin/`, nos tamanhos **1440×900**,
 - menu hambúrguer abrindo e fechando no mobile;
 - **tilt 3D** ativando com mouse e *não* ativando em toque;
 - envio do formulário gerando o link correto do WhatsApp (com o consentimento marcado);
-- existência da seção de notícias e do botão de WhatsApp na barra de navegação;
+- a home **sem** grade de notícias (só o convite) e a página `/noticias.html` com a grade
+  carregada e o botão "carregar mais"; a **ausência do botão de WhatsApp** na navegação;
 - **o painel `/admin`**: tela de login, `noindex`, login de verdade com a credencial local,
   e as quatro abas (Resumo, Notícias, Leads, Visitas) carregando os dados sem erro.
 
@@ -161,7 +165,8 @@ npm run sitemap
 
 | Arquivo | Função |
 | --- | --- |
-| `index.html` | Página única + sprite de ícones SVG inline + SEO (OG/JSON-LD) |
+| `index.html` | Página principal (sobre, serviços, produtos, contato) + sprite de ícones SVG inline + SEO (OG/JSON-LD) |
+| `noticias.html` | **Página exclusiva das notícias** do agronegócio (grade, "carregar mais" e SEO próprio) |
 | `404.html` | Página de erro com a identidade do site e links para as seções |
 | `style.css` | Estilos completos (tema verde/dourado, responsivo) |
 | `script.js` | Menu mobile, rolagem suave, animação ao rolar, partículas, tilt 3D, envio ao WhatsApp, aplicação do `site.config.js`, **notícias + leads + analytics** |
@@ -186,6 +191,29 @@ npm run sitemap
 | `tools/test-supabase.js` | Teste de integração com o Supabase (RLS, RPC, login e painel) |
 | `tools/visual-check.js` | Verificação visual real no Chrome headless (layout, contraste, interações) |
 | `assets/` | Imagens do site |
+
+## As páginas do site
+
+| Página | Endereço | O que tem |
+| --- | --- | --- |
+| Home | `/` (`index.html`) | Hero, sobre, serviços, produtos, **convite para as notícias** e contato |
+| Notícias | `/noticias.html` | **A lista de notícias do agronegócio** (página própria, com SEO próprio) |
+| Erro 404 | `/404.html` | Página de erro com links para as seções e para as notícias |
+| Painel | `/admin/` | Área administrativa (bloqueada para buscadores) |
+
+Regras que valem para todas as páginas:
+
+- **A grade de notícias fica só em `noticias.html`.** Na home existe apenas um bloco de
+  convite (“Ver todas as notícias”) apontando para lá — a lista não aparece mais misturada
+  com as informações da Q GRÃOS.
+- **Não existe botão de WhatsApp no cabeçalho.** O `npm run verify` **falha** se o
+  `.nav-whatsapp` reaparecer no HTML ou no `style.css`, para ele não voltar sem querer.
+  Os links de WhatsApp do hero e do contato continuam existindo.
+- A navegação é a mesma nas duas páginas (a página atual recebe `aria-current="page"`).
+
+As notícias carregam do Supabase com paginação real (`limit`/`offset` na API REST):
+a página mostra 9 por vez e o botão **“Carregar mais notícias”** aparece só quando ainda
+há resultado — ao terminar, ele some sozinho.
 
 ## Supabase: banco, notícias, leads e painel
 
@@ -231,7 +259,7 @@ Essa chave **é pública por definição** e vai no navegador de propósito — 
 O que protege os dados são as **políticas de RLS**. A chave `service_role` / `sb_secret_`
 **nunca** entra no site nem no `supabase-api.js` (o `npm run verify` falha se aparecer).
 
-Enquanto o `anonKey` estiver vazio o site funciona igual: a seção de notícias mostra
+Enquanto o `anonKey` estiver vazio o site funciona igual: a página de notícias mostra
 “entram no ar em breve” e nada é enviado ao banco.
 
 ### 3. O usuário administrador (já criado)
@@ -390,6 +418,7 @@ Depois de publicar:
    Supabase (Authentication → Users → *Reset password*) e atualize o `.qg-admin.json`
    local (ignorado pelo Git) com a nova senha.
 6. **Publicar a primeira notícia** — o painel já abre e publica. É só preencher título,
-   resumo e categoria; o que estiver marcado como “Publicar no site” aparece em `/` na hora.
+   resumo e categoria; o que estiver marcado como “Publicar no site” aparece na página
+   **`/noticias.html`** na hora (a home mostra apenas o convite para abrir essa página).
 7. **Publicar a Edge Function** — `supabase functions deploy noticias` (opcional: o site
    funciona sem ela).

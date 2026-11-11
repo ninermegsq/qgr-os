@@ -1,0 +1,8 @@
+# Configuracao local do Supabase (usada pelo CLI: supabase start / functions deploy)
+# O projeto real e o rppoiwrbxqdbtavhgdjk.
+
+project_id = "rppoiwrbxqdbtavhgdjk"
+
+[functions.noticias]
+# O feed e publico: a RLS do banco garante que so sai noticia publicada.
+verify_jwt = false

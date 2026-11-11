@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página não encontrada | Q GRÃOS</title>
+    <meta name="description"
+        content="A página que você procura não existe. Volte ao site da Q GRÃOS ou fale com a nossa equipe pelo WhatsApp.">
+    <meta name="robots" content="noindex, follow">
+
+    <link rel="stylesheet" href="style.css?v=7">
+
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230F3D2E'/><circle cx='31' cy='29' r='15' fill='none' stroke='%23D4AF37' stroke-width='6'/><path d='M40 39l11 12' stroke='%23D4AF37' stroke-width='6' stroke-linecap='round'/></svg>">
+
+    <style>
+        /* Estilos exclusivos da pagina de erro (o resto vem do style.css) */
+        .error-body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, rgba(15, 61, 46, 0.95), rgba(10, 41, 31, 1));
+            color: var(--text-light);
+            padding: 40px 20px;
+        }
+
+        .error-box {
+            text-align: center;
+            max-width: 620px;
+        }
+
+        .error-box .logo {
+            display: inline-block;
+            font-size: 2.2rem;
+            margin-bottom: 30px;
+        }
+
+        .error-code {
+            font-family: 'Rajdhani', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+            font-size: clamp(5rem, 18vw, 10rem);
+            font-weight: 700;
+            line-height: 1;
+            background: var(--gradient-gold);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .error-box h1 {
+            font-size: clamp(1.5rem, 4vw, 2.4rem);
+            margin-bottom: 18px;
+        }
+
+        .error-box .error-text {
+            font-size: 1.1rem;
+            opacity: 0.85;
+            margin-bottom: 40px;
+            line-height: 1.7;
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .error-links {
+            margin-top: 45px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            gap: 26px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .error-links a {
+            color: rgba(255, 255, 255, 0.75);
+            font-weight: 500;
+        }
+
+        .error-links a:hover {
+            color: var(--secondary-color);
+        }
+
+        .error-footer {
+            margin-top: 35px;
+            font-size: 0.85rem;
+            opacity: 0.55;
+        }
+    </style>
+</head>
+
+<body class="error-body">
+    <main class="error-box">
+        <a href="/" class="logo">Q <span class="highlight">GRÃOS</span></a>
+
+        <p class="error-code">404</p>
+        <h1>Página não encontrada</h1>
+        <p class="error-text">
+            O endereço que você tentou abrir não existe ou foi movido.
+            Volte para a página inicial ou fale direto com a nossa equipe pelo WhatsApp —
+            responders rapidinho.
+        </p>
+
+        <div class="error-actions">
+            <a href="/" class="btn-primary">Ir para o início</a>
+            <a href="https://wa.me/5566992281757" class="btn-secondary" data-config="whatsapp"
+                target="_blank" rel="noopener noreferrer">Falar no WhatsApp</a>
+        </div>
+
+        <nav class="error-links" aria-label="Seções do site">
+            <a href="/#about">Sobre</a>
+            <a href="/#services">Serviços</a>
+            <a href="/#products">Produtos</a>
+            <a href="/#contact">Contato</a>
+        </nav>
+
+        <p class="error-footer">&copy; <span data-config="year">2026</span> Q GRÃOS — Corretora de Grãos</p>
+    </main>
+
+    <script src="site.config.js?v=1" defer></script>
+    <script src="script.js?v=5" defer></script>
+</body>
+
+</html>

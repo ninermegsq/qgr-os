@@ -1,0 +1,32 @@
+name: Verificacao
+
+# Roda a checagem leve a cada push na main e em cada pull request.
+# A verificacao visual (npm run visual) e o teste de integracao com o
+# Supabase (npm run test:supabase) rodam localmente, porque dependem de
+# Chrome e de credenciais do administrador.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Checagens estaticas
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar as dependencias
+        run: npm ci
+
+      - name: Rodar as checagens
+        run: npm run check

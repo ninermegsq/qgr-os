@@ -1,0 +1,1363 @@
+:root {
+    --primary-color: #0F3D2E;
+    /* Deep Green */
+    --primary-light: #1A5C45;
+    --secondary-color: #D4AF37;
+    /* Gold */
+    /* Versão escura do dourado para texto sobre fundo claro.
+       O dourado puro (#D4AF37) sobre branco dá 2.1:1 e reprova na
+       norma de acessibilidade (WCAG AA pede 4.5:1 para texto pequeno). */
+    --gold-text: #8A6D12;
+    --secondary-hover: #F2C94C;
+    --text-dark: #1A1A1A;
+    --text-light: #F5F5F5;
+    --bg-light: #FFFFFF;
+    --bg-gray: #F9F9F9;
+    --gradient-gold: linear-gradient(135deg, #D4AF37 0%, #F2C94C 100%);
+    --gradient-green: linear-gradient(135deg, #0F3D2E 0%, #1A5C45 100%);
+    --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 20px 25px rgba(0, 0, 0, 0.15);
+    --transition: all 0.3s ease;
+    --navbar-height: 80px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Outfit', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text-dark);
+    /* Impede rolagem horizontal: o badge "500+" e o card .img-2 usam
+       transform/translateZ e estouram a largura da tela no celular */
+    overflow-x: hidden;
+}
+
+h4,
+h5,
+h6 {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+    transition: var(--transition);
+}
+
+ul {
+    list-style: none;
+}
+
+img {
+    max-width: 100%;
+    display: block;
+}
+
+/* Foco visível para navegação por teclado (o padrão do navegador
+   some em alguns elementos com borda arredondada) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+    outline: 3px solid var(--secondary-color);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+/* Os campos do formulário já têm box-shadow no foco; o outline do
+   teclado fica fora dele para não sumir sobre o fundo verde */
+.form-group input:focus-visible,
+.form-group textarea:focus-visible,
+.form-group select:focus-visible {
+    outline-offset: 1px;
+}
+
+/* Ícones em SVG inline (sem CDN): o tamanho segue o font-size do contexto */
+.ic {
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+    overflow: visible;
+}
+
+.btn-primary .ic,
+.btn-secondary .ic {
+    margin-right: 8px;
+}
+
+.social-links a .ic {
+    font-size: 1.15rem;
+}
+
+/* Compensa a navbar fixa ao rolar até uma seção */
+section[id],
+#contactForm {
+    scroll-margin-top: var(--navbar-height);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.highlight {
+    color: var(--secondary-color);
+}
+
+/* Dourado em texto sobre fundo claro: usa a versão escura para ficar
+   legível. Onde o fundo é escuro (navbar, rodapé, bloco de contato)
+   o dourado claro continua valendo. */
+.history .highlight,
+.services .highlight,
+.products .highlight {
+    color: var(--gold-text);
+}
+
+.text-gradient {
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.section-tag {
+    display: inline-block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--gold-text);
+    margin-bottom: 10px;
+    position: relative;
+    padding-left: 40px;
+}
+
+/* No bloco de contato (fundo verde escuro) o dourado claro tem
+   contraste melhor que a versão escura */
+.contact-info .section-tag {
+    color: var(--secondary-color);
+}
+
+.section-tag::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 30px;
+    height: 2px;
+    background-color: var(--secondary-color);
+    transform: translateY(-50%);
+}
+
+.btn-primary {
+    display: inline-block;
+    padding: 12px 30px;
+    background: var(--gradient-gold);
+    color: var(--primary-color);
+    font-weight: 700;
+    border-radius: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transition: var(--transition);
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+    display: inline-block;
+    padding: 12px 30px;
+    background: transparent;
+    color: var(--text-light);
+    font-weight: 600;
+    border: 2px solid var(--text-light);
+    border-radius: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: var(--transition);
+}
+
+.btn-secondary:hover {
+    background: var(--text-light);
+    color: var(--primary-color);
+}
+
+/* Navigation */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    padding: 20px 0;
+    transition: var(--transition);
+    background: rgba(15, 61, 46, 0.95);
+    backdrop-filter: blur(10px);
+}
+
+.navbar .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-light);
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+
+.nav-links a {
+    color: var(--text-light);
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+.nav-links a:hover {
+    color: var(--secondary-color);
+}
+
+.hamburger {
+    display: none;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    padding: 0;
+}
+
+.hamburger span {
+    display: block;
+    width: 25px;
+    height: 3px;
+    background-color: var(--text-light);
+    margin: 5px 0;
+    transition: var(--transition);
+}
+
+/* Estado "menu aberto": as barras viram um X */
+.hamburger.active span:nth-child(1) {
+    transform: translateY(8px) rotate(45deg);
+}
+
+.hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger.active span:nth-child(3) {
+    transform: translateY(-8px) rotate(-45deg);
+}
+
+/* Hero Section */
+.hero {
+    position: relative;
+    height: 100vh;
+    min-height: 700px;
+    display: flex;
+    align-items: center;
+    color: var(--text-light);
+    overflow: hidden;
+    background: radial-gradient(circle at center, rgba(15, 61, 46, 0.8), rgba(10, 41, 31, 1));
+    /* Cria contexto de empilhamento para que o canvas de partículas
+       (z-index: 0) fique acima do fundo do hero e não atrás dele */
+    isolation: isolate;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 1;
+    max-width: 800px;
+}
+
+.hero-tag {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px 16px;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    margin-top: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+}
+
+.hero h1 {
+    font-size: clamp(2rem, 6vw, 4rem);
+    margin-bottom: 20px;
+    line-height: 1.1;
+}
+
+.hero p {
+    font-size: 1.2rem;
+    margin-bottom: 45px;
+    max-width: 600px;
+    opacity: 0.9;
+}
+
+.hero-btns {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 60px;
+    flex-wrap: wrap;
+}
+
+.hero-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 30px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.stat-item h3 {
+    font-size: 2.5rem;
+    color: var(--secondary-color);
+    margin-bottom: 5px;
+}
+
+.stat-item p {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0;
+}
+
+/* History Section */
+.history {
+    padding: clamp(60px, 10vh, 100px) 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(5px);
+}
+
+.history-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    align-items: center;
+}
+
+.history-content h2 {
+    font-size: 3rem;
+    color: var(--primary-color);
+    margin-bottom: 40px;
+}
+
+.history-content p {
+    color: #555;
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    line-height: 1.8;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 40px;
+}
+
+.feature {
+    display: flex;
+    gap: 15px;
+}
+
+.feature .ic {
+    font-size: 2rem;
+    color: var(--secondary-color);
+    flex-shrink: 0;
+}
+
+.feature h4 {
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    margin-bottom: 4px;
+}
+
+.feature p {
+    color: #555;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 0;
+}
+
+/* Container dos cards sobrepostos da história */
+.history-images {
+    position: relative;
+    height: 520px;
+    transform-style: preserve-3d;
+}
+
+.img-card {
+    position: absolute;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.img-card a {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.img-1 {
+    top: 0;
+    right: 0;
+    width: 80%;
+    height: 70%;
+    z-index: 1;
+    transform: translateZ(20px);
+}
+
+.img-2 {
+    bottom: 0;
+    left: 0;
+    width: 60%;
+    height: 50%;
+    z-index: 2;
+    border: 5px solid var(--bg-light);
+    transform: translateZ(40px);
+}
+
+.img-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.experience-badge {
+    position: absolute;
+    bottom: 10%;
+    right: 10%;
+    background: var(--primary-color);
+    color: var(--text-light);
+    padding: 30px;
+    border-radius: 10px;
+    z-index: 3;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    transform: translateZ(60px);
+}
+
+.experience-badge .number {
+    display: block;
+    font-size: 3rem;
+    font-weight: 700;
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--secondary-color);
+    line-height: 1;
+}
+
+/* Services Section */
+.services {
+    position: relative;
+    z-index: 1;
+}
+
+.section-header {
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto 80px;
+}
+
+.section-header h2 {
+    font-size: 3rem;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+}
+
+.section-header p {
+    color: #666;
+    font-size: 1.2rem;
+}
+
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 40px;
+    margin-bottom: 60px;
+}
+
+.service-card {
+    background: var(--bg-light);
+    padding: 50px 30px;
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.1s ease-out, box-shadow 0.3s ease;
+    border-bottom: 3px solid transparent;
+    transform-style: preserve-3d;
+}
+
+.service-card:hover {
+    box-shadow: var(--shadow-lg);
+    border-bottom: 3px solid var(--secondary-color);
+}
+
+.icon-box {
+    width: 70px;
+    height: 70px;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 25px;
+    transform: translateZ(20px);
+}
+
+.icon-box .ic {
+    font-size: 2rem;
+    color: var(--secondary-color);
+}
+
+.service-card h3 {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    transform: translateZ(10px);
+}
+
+.service-card p {
+    color: #666;
+    margin-bottom: 25px;
+    font-size: 0.95rem;
+    transform: translateZ(5px);
+}
+
+.link-arrow {
+    color: var(--primary-color);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transform: translateZ(10px);
+}
+
+.link-arrow:hover {
+    color: var(--secondary-color);
+    gap: 10px;
+}
+
+.cta-box {
+    background: var(--gradient-green);
+    border-radius: 15px;
+    padding: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-light);
+    position: relative;
+    overflow: hidden;
+    transform-style: preserve-3d;
+}
+
+.cta-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    /* Textura gerada em CSS: o asset assets/pattern.png não existe no projeto */
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.8) 1.5px, transparent 1.5px);
+    background-size: 16px 16px;
+    opacity: 0.12;
+    /* Impede que o overlay decorativo bloqueie o clique no botão */
+    pointer-events: none;
+}
+
+.cta-text h3 {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    transform: translateZ(20px);
+}
+
+.cta-text p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    transform: translateZ(10px);
+}
+
+/* Products Section */
+.products {
+    padding: clamp(60px, 10vh, 100px) 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(5px);
+}
+
+.products-slider {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 40px;
+    margin-bottom: 40px;
+}
+
+.product-card {
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.1s ease-out, box-shadow 0.3s ease;
+    background: var(--bg-light);
+    transform-style: preserve-3d;
+}
+
+.product-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.product-img {
+    position: relative;
+    height: 350px;
+    overflow: hidden;
+    transform: translateZ(10px);
+}
+
+.product-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.product-card:hover .product-img img {
+    transform: scale(1.1);
+}
+
+.product-overlay {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    transform: translateZ(20px);
+}
+
+.badge {
+    background: var(--secondary-color);
+    color: var(--primary-color);
+    padding: 5px 15px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.product-info {
+    padding: 20px;
+    text-align: center;
+    background: var(--bg-light);
+    position: relative;
+    z-index: 1;
+    transform: translateZ(20px);
+}
+
+.product-info h3 {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    margin-bottom: 5px;
+}
+
+.product-info p {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.products-footer {
+    text-align: center;
+    margin-top: 40px;
+}
+
+.products-footer p {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+/* Contact Section */
+.contact {
+    padding: clamp(60px, 10vh, 100px) 0;
+    background-color: rgba(249, 249, 249, 0.8);
+    backdrop-filter: blur(5px);
+}
+
+.contact-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 100px;
+    background: var(--bg-light);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    transform-style: preserve-3d;
+}
+
+.contact-info {
+    background: var(--primary-color);
+    padding: 80px;
+    color: var(--text-light);
+    transform: translateZ(20px);
+}
+
+.contact-info h2 {
+    font-size: 2.5rem;
+    color: var(--text-light);
+    margin-bottom: 20px;
+}
+
+/* A opacidade vale só para o parágrafo de introdução: se valer para
+   todos, os links de telefone/e-mail (dourado) caem para 4.24:1 */
+.contact-info > p {
+    opacity: 0.8;
+    margin-bottom: 40px;
+}
+
+.info-item {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.info-item .icon {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: var(--secondary-color);
+    flex-shrink: 0;
+}
+
+.info-item h4 {
+    font-size: 1.1rem;
+    margin-bottom: 5px;
+}
+
+.info-item p {
+    margin-bottom: 0;
+    font-size: 0.95rem;
+}
+
+/* Telefone, e-mail e WhatsApp clicáveis no bloco de contato */
+.info-item a {
+    color: var(--secondary-color);
+    font-weight: 600;
+    border-bottom: 1px solid transparent;
+    transition: var(--transition);
+}
+
+.info-item a:hover {
+    color: var(--text-light);
+    border-bottom-color: var(--secondary-color);
+}
+
+.social-links {
+    display: flex;
+    gap: 20px;
+    margin-top: 40px;
+}
+
+.social-links a {
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    transition: var(--transition);
+}
+
+.social-links a:hover {
+    background: var(--secondary-color);
+    color: var(--primary-color);
+    border-color: var(--secondary-color);
+}
+
+/* Rede social sem URL cadastrada: fica visível, mas desativada */
+.social-links a[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.contact-form-box {
+    padding: 80px;
+    transform: translateZ(10px);
+}
+
+.contact-form-box h3 {
+    font-size: 2rem;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.contact-form-box p {
+    color: #666;
+    margin-bottom: 30px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+/* O <select> perde a seta nativa para caber a seta desenhada
+   (SVG inline em data URI, sem depender de CDN) */
+.form-group select {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    background-color: var(--bg-light);
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230F3D2E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 18px;
+    padding-right: 40px;
+}
+
+/* "Selecione" (opção vazia) aparece em cinza para não parecer
+   uma resposta já escolhida */
+.form-group select:invalid {
+    color: #666;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(15, 61, 46, 0.1);
+}
+
+.full-width {
+    width: 100%;
+}
+
+.form-note {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 15px;
+    text-align: center;
+}
+
+/* Footer */
+footer {
+    background: #0a291f;
+    color: var(--text-light);
+    padding: 80px 0 0;
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr;
+    gap: 60px;
+    padding-bottom: 60px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.footer-col p {
+    opacity: 0.7;
+    margin: 20px 0;
+    line-height: 1.8;
+}
+
+.footer-col h4 {
+    font-size: 1.2rem;
+    margin-bottom: 25px;
+    color: var(--text-light);
+}
+
+.footer-col ul li {
+    margin-bottom: 15px;
+}
+
+.footer-col ul li a {
+    color: rgba(255, 255, 255, 0.7);
+    transition: var(--transition);
+}
+
+.footer-col ul li a:hover {
+    color: var(--secondary-color);
+    padding-left: 5px;
+}
+
+.footer-col .ic {
+    color: var(--secondary-color);
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+}
+
+.footer-badges span {
+    display: inline-block;
+    padding: 5px 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50px;
+    font-size: 0.8rem;
+    margin-top: 10px;
+}
+
+.footer-bottom {
+    padding: 20px 0;
+    text-align: center;
+    font-size: 0.9rem;
+    opacity: 0.6;
+}
+
+/* Particle Canvas */
+#particles-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Fica acima do fundo do .hero (isolation: isolate) e abaixo do
+       conteúdo (.hero-content usa z-index: 1) */
+    z-index: 0;
+    pointer-events: none;
+    background: transparent;
+}
+
+/* 3D Tilt Effect Class */
+.tilt-card {
+    transition: transform 0.1s ease-out, box-shadow 0.3s ease;
+}
+
+/* ---------- Revelação ao rolar (substitui o AOS) ----------
+   O estado inicial "invisível" é aplicado pelo JS (classe .aos-init).
+   Se o JS não carregar, o conteúdo aparece normalmente — o site nunca
+   fica em branco. */
+[data-aos] {
+    transition-property: opacity, transform, box-shadow;
+    transition-duration: 800ms, 800ms, 300ms;
+    transition-timing-function: ease;
+}
+
+[data-aos].aos-init {
+    opacity: 0;
+}
+
+[data-aos="fade-up"] {
+    transform: translate3d(0, 60px, 0);
+}
+
+[data-aos="fade-down"] {
+    transform: translate3d(0, -60px, 0);
+}
+
+[data-aos="fade-left"] {
+    transform: translate3d(-60px, 0, 0);
+}
+
+[data-aos="fade-right"] {
+    transform: translate3d(60px, 0, 0);
+}
+
+[data-aos="zoom-in"] {
+    transform: scale(0.92);
+}
+
+/* Precisa vir depois das regras acima para vencer o empate de especificidade */
+[data-aos].is-visible {
+    opacity: 1;
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    [data-aos],
+    [data-aos].aos-init,
+    [data-aos].is-visible {
+        transition: none !important;
+        transform: none !important;
+        opacity: 1 !important;
+    }
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .hero h1 {
+        font-size: 3rem;
+    }
+
+    .history-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .history-images {
+        height: 500px;
+        order: -1;
+    }
+
+    .contact-wrapper {
+        grid-template-columns: 1fr;
+        gap: 40px;
+    }
+
+    .contact-info,
+    .contact-form-box {
+        padding: 40px;
+    }
+
+    .footer-content {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Em tela pequena o conteúdo do hero é mais alto que a caixa
+       (100vh): sem isso o botão e os números ficam cortados */
+    .hero {
+        height: auto;
+        min-height: 100vh;
+        padding: 110px 0 60px;
+    }
+
+    .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        background: var(--primary-color);
+        flex-direction: column;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .nav-links.active {
+        display: flex;
+    }
+
+    .hamburger {
+        display: block;
+    }
+
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+
+    .cta-box {
+        flex-direction: column;
+        text-align: center;
+        gap: 30px;
+    }
+
+    .footer-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 576px) {
+    .hero h1 {
+        font-size: 2rem;
+    }
+
+    .section-header h2,
+    .history-content h2,
+    .contact-info h2 {
+        font-size: 2rem;
+    }
+
+    .hero-btns {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .services,
+    .products,
+    .contact {
+        padding: 60px 0;
+    }
+
+    .contact-wrapper {
+        gap: 30px;
+    }
+
+    .contact-info,
+    .contact-form-box {
+        padding: 30px;
+    }
+}
+
+/* ==================================================================
+ * Botão de WhatsApp na barra de navegação
+ * ================================================================== */
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.nav-whatsapp {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    background: var(--gradient-gold);
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.nav-whatsapp .ic {
+    width: 1.15rem;
+    height: 1.15rem;
+    font-size: 1.15rem;
+}
+
+.nav-whatsapp:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+/* ==================================================================
+ * Seção de notícias (alimentada pelo Supabase)
+ * ================================================================== */
+.news {
+    padding: 100px 0;
+    background: var(--bg-gray);
+}
+
+.news .highlight {
+    color: var(--gold-text);
+}
+
+.news-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    margin-top: 50px;
+}
+
+.news-card {
+    background: var(--bg-light);
+    border: 1px solid rgba(15, 61, 46, 0.06);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    transition: var(--transition);
+}
+
+.news-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-md);
+}
+
+.news-media {
+    height: 180px;
+    overflow: hidden;
+    background: var(--gradient-green);
+}
+
+.news-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.news-media-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--secondary-color);
+}
+
+.news-media-placeholder .ic {
+    width: 56px;
+    height: 56px;
+    opacity: 0.85;
+}
+
+.news-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.news-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.news-category {
+    display: inline-block;
+    /* Fundo sólido claro + texto em dourado escuro: garante o contraste
+       mínimo do WCAG AA mesmo com abadge sobre o card branco */
+    background: #FDF6E3;
+    color: #6E560C;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 50px;
+}
+
+.news-date {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.news-card h3 {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1.25rem;
+    color: var(--primary-color);
+    line-height: 1.3;
+    margin-bottom: 10px;
+}
+
+.news-card p {
+    color: #666;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 18px;
+    flex: 1;
+}
+
+.news-card .news-link {
+    font-size: 0.9rem;
+}
+
+.news-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #666;
+    padding: 40px 20px;
+    background: var(--bg-light);
+    border: 1px dashed rgba(15, 61, 46, 0.2);
+    border-radius: 12px;
+}
+
+/* ==================================================================
+ * Formulário: consentimento (LGPD) e campo isca anti-spam
+ * ================================================================== */
+.check-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 0;
+    font-weight: 400;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: #444;
+    cursor: pointer;
+}
+
+.check-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    flex-shrink: 0;
+    margin: 2px 0 0;
+    accent-color: var(--primary-color);
+    cursor: pointer;
+}
+
+/* Campo isca: invisível para o usuário, mas presente no formulário
+   para que robôs de preenchimento automático acabem marcando */
+.hp-field {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- Responsivo ---------- */
+
+@media (max-width: 900px) {
+    .news-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .nav-right {
+        gap: 14px;
+    }
+
+    /* No celular fica só o ícone do WhatsApp, como no desenho de referência */
+    .nav-whatsapp {
+        padding: 9px 12px;
+    }
+
+    .nav-whatsapp-text {
+        display: none;
+    }
+
+    .news {
+        padding: 70px 0;
+    }
+
+    .news-grid {
+        grid-template-columns: 1fr;
+        margin-top: 35px;
+    }
+}

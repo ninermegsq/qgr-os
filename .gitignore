@@ -1,0 +1,25 @@
+# Dependencias
+node_modules/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Ambiente / segredos
+.env
+.env.*
+.qg-admin.json
+
+# Publicacao
+.netlify/
+.vercel/
+.cache/
+
+# Capturas de tela geradas pela verificacao visual
+tools/shots/
+tools/visual-report.json

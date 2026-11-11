@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Q GRÃOS — Administração</title>
+
+    <!-- O painel nunca deve aparecer no Google -->
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta name="googlebot" content="noindex, nofollow">
+
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230F3D2E'/><circle cx='31' cy='29' r='15' fill='none' stroke='%23D4AF37' stroke-width='6'/><path d='M40 39l11 12' stroke='%23D4AF37' stroke-width='6' stroke-linecap='round'/></svg>">
+
+    <link rel="stylesheet" href="admin.css?v=1">
+</head>
+
+<body>
+    <!-- ================= LOGIN ================= -->
+    <div class="login-screen" id="loginScreen">
+        <form class="login-card" id="loginForm" autocomplete="on">
+            <div class="login-brand">
+                <span class="login-logo">Q <span class="gold">GRÃOS</span></span>
+                <p>Painel administrativo</p>
+            </div>
+
+            <div class="field">
+                <label for="loginEmail">E-mail</label>
+                <input type="email" id="loginEmail" name="email" placeholder="voce@qgraos.com.br"
+                    autocomplete="username" required>
+            </div>
+
+            <div class="field">
+                <label for="loginPassword">Senha</label>
+                <input type="password" id="loginPassword" name="senha" placeholder="Sua senha"
+                    autocomplete="current-password" required>
+            </div>
+
+            <p class="alert" id="loginAlert" role="alert" hidden></p>
+            <p class="alert warning" id="loginConfigAlert" role="alert" hidden></p>
+
+            <button type="submit" class="btn primary" id="loginButton">Entrar</button>
+        </form>
+    </div>
+
+    <!-- ================= PAINEL ================= -->
+    <div class="app" id="app" hidden>
+        <header class="topbar">
+            <div class="topbar-left">
+                <span class="brand">Q <span class="gold">GRÃOS</span></span>
+                <span class="panel-tag">Painel</span>
+            </div>
+            <div class="topbar-right">
+                <span class="user-email" id="userEmail"></span>
+                <button type="button" class="btn ghost" id="logoutButton">Sair</button>
+            </div>
+        </header>
+
+        <nav class="tabs" id="tabs" role="tablist">
+            <button type="button" class="tab active" data-tab="resumo" role="tab" aria-selected="true">Resumo</button>
+            <button type="button" class="tab" data-tab="noticias" role="tab" aria-selected="false">Notícias</button>
+            <button type="button" class="tab" data-tab="leads" role="tab" aria-selected="false">Leads</button>
+            <button type="button" class="tab" data-tab="visitas" role="tab" aria-selected="false">Visitas</button>
+        </nav>
+
+        <main class="content">
+            <!-- ---------- RESUMO ---------- -->
+            <section class="tab-panel" id="tab-resumo" role="tabpanel">
+                <div class="cards" id="cardsResumo"></div>
+
+                <div class="grid-2">
+                    <div class="panel-box">
+                        <h2>Leads nos últimos 14 dias</h2>
+                        <div class="chart" id="chartLeads"></div>
+                    </div>
+                    <div class="panel-box">
+                        <h2>Visitas nos últimos 14 dias</h2>
+                        <div class="chart" id="chartVisitas"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------- NOTÍCIAS ---------- -->
+            <section class="tab-panel" id="tab-noticias" role="tabpanel" hidden>
+                <div class="panel-box">
+                    <div class="panel-head">
+                        <h2 id="newsFormTitle">Publicar notícia</h2>
+                        <button type="button" class="btn ghost small" id="newsResetButton" hidden>Cancelar edição</button>
+                    </div>
+
+                    <form class="news-form" id="newsForm">
+                        <input type="hidden" id="newsId" name="id">
+
+                        <div class="field">
+                            <label for="newsTitle">Título</label>
+                            <input type="text" id="newsTitle" name="titulo" maxlength="220" required>
+                        </div>
+
+                        <div class="field">
+                            <label for="newsSummary">Resumo</label>
+                            <textarea id="newsSummary" name="resumo" rows="3"
+                                placeholder="Resumo curto da notícia (aparece no card do site)"></textarea>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="newsCategory">Categoria</label>
+                                <select id="newsCategory" name="categoria">
+                                    <option value="Geral">Geral</option>
+                                    <option value="Soja">Soja</option>
+                                    <option value="Milho">Milho</option>
+                                    <option value="Sorgo">Sorgo</option>
+                                    <option value="Milheto">Milheto</option>
+                                    <option value="Feijao">Feijão</option>
+                                    <option value="Gergelim">Gergelim</option>
+                                    <option value="Safra">Safra</option>
+                                    <option value="Logistica">Logística / Frete</option>
+                                    <option value="Mercado">Mercado / Preços</option>
+                                    <option value="Exportacao">Exportação</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="newsSource">Fonte</label>
+                                <input type="text" id="newsSource" name="fonte" placeholder="Ex.: Agro Brasil">
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="newsUrl">Link da notícia</label>
+                            <input type="url" id="newsUrl" name="url" placeholder="https://...">
+                        </div>
+
+                        <div class="field">
+                            <label for="newsImage">URL da imagem</label>
+                            <input type="url" id="newsImage" name="imagem_url" placeholder="https://... (opcional)">
+                        </div>
+
+                        <div class="field inline">
+                            <label class="check">
+                                <input type="checkbox" id="newsPublished" name="publicado" checked>
+                                <span>Publicar no site</span>
+                            </label>
+
+                            <label class="check">
+                                <input type="checkbox" id="newsFeatured" name="destaque">
+                                <span>Destacar (primeiro card)</span>
+                            </label>
+                        </div>
+
+                        <p class="alert" id="newsAlert" role="alert" hidden></p>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn primary" id="newsSubmit">Publicar notícia</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="panel-box">
+                    <h2>Notícias cadastradas</h2>
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Título</th>
+                                    <th>Categoria</th>
+                                    <th>Publicação</th>
+                                    <th>Cliques</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="newsTableBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="empty" id="newsEmpty" hidden>Nenhuma notícia cadastrada.</p>
+                </div>
+            </section>
+
+            <!-- ---------- LEADS ---------- -->
+            <section class="tab-panel" id="tab-leads" role="tabpanel" hidden>
+                <div class="panel-box">
+                    <div class="panel-head">
+                        <h2>Leads recebidos</h2>
+                        <div class="panel-actions">
+                            <input type="search" id="leadSearch" class="search" placeholder="Filtrar por nome, e-mail ou telefone">
+                            <button type="button" class="btn ghost small" id="leadExport">Exportar CSV</button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Recebido em</th>
+                                    <th>Contato</th>
+                                    <th>Telefone</th>
+                                    <th>Perfil</th>
+                                    <th>Busca</th>
+                                    <th>Mensagem</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leadTableBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="empty" id="leadEmpty" hidden>Nenhum lead recebido ainda.</p>
+                </div>
+            </section>
+
+            <!-- ---------- VISITAS ---------- -->
+            <section class="tab-panel" id="tab-visitas" role="tabpanel" hidden>
+                <div class="cards" id="cardsVisitas"></div>
+
+                <div class="grid-2">
+                    <div class="panel-box">
+                        <h2>Eventos por tipo</h2>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Total (90 dias)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="visitasTipoBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="panel-box">
+                        <h2>Últimas interações</h2>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Quando</th>
+                                        <th>Tipo</th>
+                                        <th>Página</th>
+                                        <th>Origem</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="visitasBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="../site.config.js?v=1"></script>
+    <script src="../supabase-api.js?v=1"></script>
+    <script src="admin.js?v=1"></script>
+</body>
+
+</html>

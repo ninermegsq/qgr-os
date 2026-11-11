@@ -1,0 +1,575 @@
+/* =====================================================================
+   Q GRAOS — painel administrativo
+   Mesma identidade do site: verde escuro + dourado.
+   ===================================================================== */
+
+:root {
+    --primary: #0F3D2E;
+    --primary-light: #1A5C45;
+    --gold: #D4AF37;
+    --gold-soft: #F2C94C;
+    --gold-text: #8A6D12;
+    --text: #1A1A1A;
+    --muted: #6B6B6B;
+    --bg: #F4F6F5;
+    --card: #FFFFFF;
+    --line: #E2E6E4;
+    --danger: #B3261E;
+    --danger-bg: #FDECEA;
+    --ok: #1B7A46;
+    --ok-bg: #E7F5ED;
+    --radius: 12px;
+    --shadow: 0 6px 18px rgba(15, 61, 46, 0.08);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Outfit', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: inherit;
+}
+
+a {
+    color: var(--primary);
+}
+
+/* ---------------- Login ---------------- */
+
+.login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: radial-gradient(circle at top, #1A5C45 0%, #0F3D2E 60%, #0a291f 100%);
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 40px 32px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.login-brand {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.login-logo {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 1px;
+}
+
+.login-brand p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+
+.gold {
+    color: var(--gold-text);
+}
+
+/* ---------------- Formulários ---------------- */
+
+.field {
+    margin-bottom: 18px;
+}
+
+.field label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--primary);
+    margin-bottom: 6px;
+}
+
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="password"],
+.field input[type="url"],
+.field input[type="search"],
+.field input[type="date"],
+.field select,
+.field textarea {
+    width: 100%;
+    padding: 11px 13px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+}
+
+.field textarea {
+    resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 61, 46, 0.12);
+}
+
+.field.inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.alert {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid rgba(179, 38, 30, 0.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+}
+
+.alert.warning {
+    background: #FFF7E0;
+    color: #7A5A00;
+    border-color: rgba(122, 90, 0, 0.25);
+}
+
+.alert.ok {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border-color: rgba(27, 122, 70, 0.25);
+}
+
+/* ---------------- Botões ---------------- */
+
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 11px 20px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.btn.primary {
+    width: 100%;
+    background: var(--gold);
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn.primary:hover {
+    background: var(--gold-soft);
+    box-shadow: 0 6px 16px rgba(212, 175, 55, 0.35);
+}
+
+.btn.ghost {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--primary);
+}
+
+.btn.ghost:hover {
+    background: #EEF2F0;
+}
+
+.btn.small {
+    padding: 7px 13px;
+    font-size: 0.85rem;
+}
+
+.btn.danger {
+    background: transparent;
+    border: 1px solid rgba(179, 38, 30, 0.35);
+    color: var(--danger);
+    padding: 6px 11px;
+    font-size: 0.82rem;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.btn.danger:hover {
+    background: var(--danger-bg);
+}
+
+.btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* ---------------- Estrutura do painel ---------------- */
+
+.app {
+    min-height: 100vh;
+}
+
+.topbar {
+    background: var(--primary);
+    color: #F5F5F5;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.topbar-left,
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.brand {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.topbar .gold {
+    color: var(--gold);
+}
+
+.panel-tag {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50px;
+    padding: 3px 12px;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.user-email {
+    font-size: 0.88rem;
+    opacity: 0.85;
+}
+
+.topbar .btn.ghost {
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #F5F5F5;
+}
+
+.topbar .btn.ghost:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.tabs {
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    padding: 0 16px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+}
+
+.tab {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 14px 18px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.tab:hover {
+    color: var(--primary);
+}
+
+.tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--gold);
+}
+
+.content {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+/* ---------------- Blocos ---------------- */
+
+.panel-box {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 22px;
+    box-shadow: var(--shadow);
+}
+
+.panel-box h2 {
+    font-size: 1.1rem;
+    color: var(--primary);
+    margin-bottom: 16px;
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.panel-head h2 {
+    margin-bottom: 0;
+}
+
+.panel-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search {
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    min-width: 240px;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 16px;
+    margin-bottom: 22px;
+}
+
+.stat {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+}
+
+.stat .value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1.1;
+}
+
+.stat .label {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-top: 6px;
+}
+
+.stat.gold .value {
+    color: var(--gold-text);
+}
+
+/* ---------------- Tabelas ---------------- */
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+}
+
+.data-table th {
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    background: #F7F9F8;
+    white-space: nowrap;
+}
+
+.data-table tbody tr:hover {
+    background: #FAFBFB;
+}
+
+.data-table td.wrap {
+    max-width: 260px;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 50px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    background: #EEF2F0;
+    color: var(--primary);
+    white-space: nowrap;
+}
+
+.pill.novo {
+    background: #FFF7E0;
+    color: #7A5A00;
+}
+
+.pill.em_andamento {
+    background: #E7F0FB;
+    color: #14509B;
+}
+
+.pill.convertido {
+    background: var(--ok-bg);
+    color: var(--ok);
+}
+
+.pill.descartado {
+    background: #EFEFEF;
+    color: #6B6B6B;
+}
+
+.pill.publicado {
+    background: var(--ok-bg);
+    color: var(--ok);
+}
+
+.pill.rascunho {
+    background: #EFEFEF;
+    color: #6B6B6B;
+}
+
+.empty {
+    color: var(--muted);
+    font-size: 0.92rem;
+    padding: 18px 4px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.form-actions .btn.primary {
+    width: auto;
+}
+
+/* ---------------- Gráfico de barras ---------------- */
+
+.chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 170px;
+    padding-top: 10px;
+}
+
+.chart .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+}
+
+.chart .bar {
+    width: 100%;
+    max-width: 34px;
+    min-height: 3px;
+    border-radius: 5px 5px 0 0;
+    background: linear-gradient(180deg, var(--gold) 0%, #C9A233 100%);
+}
+
+.chart .bar.alt {
+    background: linear-gradient(180deg, var(--primary-light) 0%, var(--primary) 100%);
+}
+
+.chart .bar-label {
+    font-size: 0.68rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.chart .bar-value {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+/* ---------------- Responsivo ---------------- */
+
+@media (max-width: 900px) {
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 576px) {
+    .content {
+        padding: 16px;
+    }
+
+    .panel-box {
+        padding: 16px;
+    }
+
+    .search {
+        min-width: 0;
+        width: 100%;
+    }
+}

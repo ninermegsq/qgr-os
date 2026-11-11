@@ -1,0 +1,55 @@
+# ------------------------------------------------------------------
+# Q GRAOS — configuracao para Apache (Hostinger, cPanel, Locaweb...)
+# ------------------------------------------------------------------
+
+# Pagina de erro personalizada
+ErrorDocument 404 /404.html
+
+# Pagina inicial padrao
+DirectoryIndex index.html
+
+# Nao lista o conteudo das pastas
+Options -Indexes
+
+# ------------------------------------------------------------------
+# Compressao (deixa o site mais leve)
+# ------------------------------------------------------------------
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ------------------------------------------------------------------
+# Cache do navegador
+# ------------------------------------------------------------------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/html                "access plus 1 hour"
+    ExpiresByType text/css                 "access plus 7 days"
+    ExpiresByType application/javascript   "access plus 7 days"
+    ExpiresByType text/plain               "access plus 7 days"
+    ExpiresByType image/jpeg               "access plus 1 year"
+    ExpiresByType image/png                "access plus 1 year"
+    ExpiresByType image/svg+xml            "access plus 1 year"
+    ExpiresByType image/webp               "access plus 1 year"
+</IfModule>
+
+# ------------------------------------------------------------------
+# Cabecalhos de seguranca
+# ------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# ------------------------------------------------------------------
+# Forca HTTPS (comente estas linhas se o SSL ainda nao estiver ativo)
+# ------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>

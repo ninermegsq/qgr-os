@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Bloqueia caminhos internos que não devem ser indexados
+Disallow: /tools/
+Disallow: /admin/
+Disallow: /supabase/
+Disallow: /package.json
+Disallow: /package-lock.json
+Disallow: /server.js
+
+Sitemap: https://qgraos.com.br/sitemap.xml

@@ -1,0 +1,18 @@
+# Normaliza as quebras de linha no repositorio: LF para tudo, para o
+# site nao mudar entre Windows, Linux e macOS.
+* text=auto eol=lf
+
+# Scripts do Windows precisam de CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Imagens e fontes sao binarias.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf binary

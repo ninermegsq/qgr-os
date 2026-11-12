@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cotações de Grãos e do Agro | Q GRÃOS</title>
     <meta name="description"
-        content="Cotações de grãos e indicadores do mercado para quem compra e vende carga: preço físico em Mato Grosso (IMEA), cotações regionais (Grão Direto) e Chicago, B3, câmbio e macro (Investing.com).">
+        content="Cotações de grãos e indicadores do mercado para quem compra e vende carga: preço físico em Mato Grosso (IMEA), cotações regionais (Grão Direto) e Chicago, B3, câmbio e macro (Investing.com). Filtre por produto (soja, milho, algodão) e por estado.">
     <meta name="author" content="Q GRÃOS - Corretora de Grãos">
     <meta name="theme-color" content="#0F3D2E">
     <meta name="robots" content="index, follow, max-image-preview:large">
@@ -24,13 +24,13 @@
     <meta property="og:url" content="https://qgraos.com.br/cotacoes.html">
     <meta property="og:title" content="Cotações de Grãos e do Agro | Q GRÃOS">
     <meta property="og:description"
-        content="Preço físico em Mato Grosso, cotações regionais e indicadores do mercado, com a fonte e a hora de cada número.">
+        content="Preço físico em Mato Grosso, cotações regionais e indicadores do mercado, com a fonte e a hora de cada número. Filtre por produto e por estado.">
     <meta property="og:image" content="https://qgraos.com.br/assets/hero_bg.png">
     <meta property="og:image:alt" content="Q GRAOS - Corretora de Graos">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Cotações de Grãos e do Agro | Q GRÃOS">
     <meta name="twitter:description"
-        content="Preço físico em Mato Grosso, cotações regionais e indicadores do mercado, com a fonte e a hora de cada número.">
+        content="Preço físico em Mato Grosso, cotações regionais e indicadores do mercado, com a fonte e a hora de cada número. Filtre por produto e por estado.">
     <meta name="twitter:image" content="https://qgraos.com.br/assets/hero_bg.png">
 
     <!-- Dados estruturados: a pagina de cotacoes como parte do site -->
@@ -60,7 +60,7 @@
 
     <!-- Styles locais: carregam primeiro e o site funciona mesmo sem internet.
          O "?v=" evita que o navegador use uma versao antiga em cache. -->
-    <link rel="stylesheet" href="style.css?v=15">
+    <link rel="stylesheet" href="style.css?v=16">
 
     <!-- Favicon em SVG inline: evita requisição extra e erro 404 -->
     <link rel="icon"
@@ -238,7 +238,9 @@
                     <span class="section-tag">Painel de Preços</span>
                     <h2>Cotações <span class="highlight">do dia</span></h2>
                     <p>Preço de compra e venda do grão em Mato Grosso, cotações regionais e o mercado externo.
-                        Os números são atualizados pela nossa equipe na rotina de coleta.</p>
+                        Os números são atualizados pela nossa equipe na rotina de coleta. Escolha o produto
+                        (soja, milho, algodão...) e o estado que você quer ver: os filtros podem ser usados
+                        juntos.</p>
                 </div>
 
                 <!-- Linha de status: quando os dados foram atualizados -->
@@ -249,11 +251,25 @@
                     <span id="cotStatusTexto">Carregando as cotações…</span>
                 </div>
 
-                <!-- Filtro por mercado: a escolha fica no endereço. -->
-                <div class="filtro" id="cotFiltro" hidden>
-                    <span class="filtro-rotulo" id="cotFiltroRotulo">Filtrar por mercado</span>
-                    <div class="filtro-chips" id="cotChips" role="group"
-                        aria-label="Filtrar as cotações por mercado"></div>
+                <!-- Filtros: mercado, produto e estado. A escolha fica no endereço. -->
+                <div class="cot-filtros">
+                    <div class="filtro" id="cotFiltro" hidden>
+                        <span class="filtro-rotulo" id="cotFiltroRotulo">Filtrar por mercado</span>
+                        <div class="filtro-chips" id="cotChips" role="group"
+                            aria-label="Filtrar as cotações por mercado"></div>
+                    </div>
+
+                    <div class="filtro" id="cotFiltroProduto" hidden>
+                        <span class="filtro-rotulo">Filtrar por produto</span>
+                        <div class="filtro-chips" id="cotChipsProduto" role="group"
+                            aria-label="Filtrar as cotações por produto"></div>
+                    </div>
+
+                    <div class="filtro" id="cotFiltroEstado" hidden>
+                        <span class="filtro-rotulo">Filtrar por estado</span>
+                        <div class="filtro-chips" id="cotChipsEstado" role="group"
+                            aria-label="Filtrar as cotações por estado"></div>
+                    </div>
                 </div>
 
                 <div class="cot-grid" id="cotGrid" aria-live="polite">
@@ -421,7 +437,8 @@
     <script src="site.config.js?v=1" defer></script>
     <script src="supabase-api.js?v=1" defer></script>
     <script src="script.js?v=11" defer></script>
-    <script src="cotacoes.js?v=1" defer></script>
+    <script src="classificacao-cotacoes.js?v=1" defer></script>
+    <script src="cotacoes.js?v=2" defer></script>
 </body>
 
 </html>

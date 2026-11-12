@@ -1624,6 +1624,16 @@ footer {
     color: var(--text-light);
 }
 
+/* Na página de cotações os filtros (mercado, produto e estado) ficam
+   empilhados: o espaço entre eles é menor que o do filtro sozinho. */
+.cot-filtros .filtro {
+    margin-bottom: 26px;
+}
+
+.cot-filtros .filtro:last-child {
+    margin-bottom: 45px;
+}
+
 /* ==================================================================
  * Filtro por data (a listagem abre no dia de hoje)
  * ==================================================================
@@ -2671,6 +2681,20 @@ footer {
 .cot-regiao {
     color: #666;
     font-size: 0.88rem;
+}
+
+/* Sigla do estado no card (vem do filtro por estado) */
+.cot-uf {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 9px;
+    border-radius: 50px;
+    background: rgba(15, 61, 46, 0.08);
+    color: var(--primary-color);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    vertical-align: middle;
 }
 
 .cot-valor {

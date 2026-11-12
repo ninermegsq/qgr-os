@@ -47,10 +47,13 @@ function collectReferences() {
         '/noticias.html',
         '/noticia.html',
         '/noticia.js',
-        '/publicidade.html'
+        '/publicidade.html',
+        '/cotacoes.html',
+        '/cotacoes.js',
+        '/classificacao-cotacoes.js'
     ]);
 
-    ['index.html', '404.html', 'noticias.html', 'noticia.html', 'publicidade.html'].forEach(file => {
+    ['index.html', '404.html', 'noticias.html', 'noticia.html', 'publicidade.html', 'cotacoes.html'].forEach(file => {
         const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
         const pattern = /(?:src|href)="([^"]+)"/g;
         let match;
@@ -133,7 +136,10 @@ async function main() {
         { rota: '/noticias.html', precisa: 'filtroCategorias' },
         { rota: '/noticia.html', precisa: 'noticiaCorpo' },
         { rota: '/noticia.js', precisa: null },
-        { rota: '/publicidade.html', precisa: 'Publicidade' }
+        { rota: '/publicidade.html', precisa: 'Publicidade' },
+        { rota: '/cotacoes.html', precisa: 'cotChipsProduto' },
+        { rota: '/cotacoes.js', precisa: null },
+        { rota: '/classificacao-cotacoes.js', precisa: 'chaveProduto' }
     ];
 
     for (const pagina of paginas) {

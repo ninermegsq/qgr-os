@@ -44,6 +44,10 @@ const path = require('path');
 const fs = require('fs');
 const { spawnSync } = require('child_process');
 
+/* A regra de classificacao (produto e estado) e a mesma do site:
+   classificacao-cotacoes.js. */
+const classificacao = require('../classificacao-cotacoes.js');
+
 const ROOT = path.join(__dirname, '..');
 
 /* ---------- configuração ---------- */
@@ -500,7 +504,9 @@ async function coletarImea() {
                 mercado: praca.indexOf(' - ') !== -1 ? 'regional' : 'spot',
                 simbolo: simbolo,
                 produto: nomeCadeia,
+                produto_chave: classificacao.chaveProduto(nomeCadeia) || null,
                 regiao: praca,
+                uf: classificacao.chaveEstado('imea', praca) || null,
                 preco: item.Valor,
                 preco_max: null,
                 preco_min: null,
@@ -646,7 +652,9 @@ function cotacaoGd(item, contexto) {
         simbolo: 'gd_' + (item.id !== undefined && item.id !== null && item.id !== '' ?
             item.id : (slug(nome + ' ' + descricao) || 'cotacao')),
         produto: produto,
+        produto_chave: classificacao.chaveProduto(produto) || null,
         regiao: regiao,
+        uf: classificacao.chaveEstado('grao_direto', regiao) || null,
         preco: preco,
         preco_max: serie.length ? Math.max.apply(null, serie) : null,
         preco_min: serie.length ? Math.min.apply(null, serie) : null,
@@ -984,7 +992,9 @@ async function coletarInvesting() {
             mercado: fonte.mercado || 'futuros',
             simbolo: 'inv_' + (slug(chave) || 'cotacao'),
             produto: fonte.produto || chave,
+            produto_chave: classificacao.chaveProduto(fonte.produto || chave) || null,
             regiao: fonte.regiao || null,
+            uf: classificacao.chaveEstado('investing', fonte.regiao || null) || null,
             preco: preco,
             preco_max: null,
             preco_min: null,
@@ -1210,11 +1220,12 @@ function gerarSql(itens, resultados) {
     }
 
     const chavesCotacao = [
-        'fonte', 'mercado', 'simbolo', 'produto', 'regiao', 'preco',
-        'preco_max', 'preco_min', 'variacao', 'variacao_abs', 'unidade', 'referencia'
+        'fonte', 'mercado', 'simbolo', 'produto', 'produto_chave', 'regiao', 'uf',
+        'preco', 'preco_max', 'preco_min', 'variacao', 'variacao_abs', 'unidade', 'referencia'
     ];
 
-    const tiposCotacao = 'fonte text, mercado text, simbolo text, produto text, regiao text,' +
+    const tiposCotacao = 'fonte text, mercado text, simbolo text, produto text,' +
+        ' produto_chave text, regiao text, uf text,' +
         ' preco numeric, preco_max numeric, preco_min numeric, variacao numeric,' +
         ' variacao_abs numeric, unidade text, referencia text';
 
@@ -1243,7 +1254,9 @@ function gerarSql(itens, resultados) {
         linhas.join(',\n'),
         ']$json$::jsonb) AS x(' + tiposCotacao + ')',
         'ON CONFLICT (fonte, simbolo) DO UPDATE SET',
-        '    mercado = EXCLUDED.mercado, produto = EXCLUDED.produto, regiao = EXCLUDED.regiao,',
+        '    mercado = EXCLUDED.mercado, produto = EXCLUDED.produto,',
+        '    produto_chave = EXCLUDED.produto_chave, regiao = EXCLUDED.regiao,',
+        '    uf = EXCLUDED.uf,',
         '    preco = EXCLUDED.preco, preco_max = EXCLUDED.preco_max, preco_min = EXCLUDED.preco_min,',
         '    variacao = EXCLUDED.variacao, variacao_abs = EXCLUDED.variacao_abs,',
         '    unidade = EXCLUDED.unidade, referencia = EXCLUDED.referencia, publicado = true;',

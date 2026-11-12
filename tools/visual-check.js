@@ -632,6 +632,10 @@ function auditDom() {
     const statusCotacoes = document.getElementById('cotStatusTexto');
     const chipsCotacoes = document.getElementById('cotChips');
     const filtroCotacoes = document.getElementById('cotFiltro');
+    const chipsProdutoCotacoes = document.getElementById('cotChipsProduto');
+    const filtroProdutoCotacoes = document.getElementById('cotFiltroProduto');
+    const chipsEstadoCotacoes = document.getElementById('cotChipsEstado');
+    const filtroEstadoCotacoes = document.getElementById('cotFiltroEstado');
     const avisoGrade = gradeCotacoes ? gradeCotacoes.querySelector('.news-empty') : null;
 
     result.cotacoes = {
@@ -644,6 +648,12 @@ function auditDom() {
         chips: chipsCotacoes ? chipsCotacoes.querySelectorAll('button[aria-pressed]').length : 0,
         chipsPressionados: chipsCotacoes ? chipsCotacoes.querySelectorAll('button[aria-pressed="true"]').length : 0,
         filtroVisivel: filtroCotacoes ? filtroCotacoes.getBoundingClientRect().height > 0 : false,
+        chipsProdutoExiste: !!chipsProdutoCotacoes,
+        chipsProduto: chipsProdutoCotacoes ? chipsProdutoCotacoes.querySelectorAll('button[aria-pressed]').length : 0,
+        filtroProdutoVisivel: filtroProdutoCotacoes ? filtroProdutoCotacoes.getBoundingClientRect().height > 0 : false,
+        chipsEstadoExiste: !!chipsEstadoCotacoes,
+        chipsEstado: chipsEstadoCotacoes ? chipsEstadoCotacoes.querySelectorAll('button[aria-pressed]').length : 0,
+        filtroEstadoVisivel: filtroEstadoCotacoes ? filtroEstadoCotacoes.getBoundingClientRect().height > 0 : false,
         avisoVazio: avisoGrade ? (avisoGrade.textContent || '').trim().slice(0, 90) : '',
         linkParaCotacoes: !!document.querySelector('a[href="cotacoes.html"]'),
         ctaExiste: !!document.querySelector('.cot-cta-box')
@@ -1617,6 +1627,61 @@ async function main() {
             const shot = path.join(SHOTS_DIR, label + '.png');
             await page.screenshot({ path: shot, fullPage: true });
 
+            /* ---------- Filtros de cotacao (produto e estado) ----------
+               Roda depois do print para o arquivo do relatorio mostrar a
+               pagina como o leitor encontra. */
+            if (target.name === 'cotacoes') {
+                interactions.filtroCotacoes = await page.evaluate(async () => {
+                    const espera = ms => new Promise(resolve => setTimeout(resolve, ms));
+                    const cartoes = () => Array.from(document.querySelectorAll('#cotGrid .cot-card'));
+                    const chipProduto = () => document.querySelector('#cotChipsProduto button[data-produto="soja"]');
+                    const chipEstado = () => document.querySelector('#cotChipsEstado button[data-uf="MT"]');
+
+                    const resultado = { cartoesIniciais: cartoes().length };
+
+                    const botaoProduto = chipProduto();
+                    if (!botaoProduto) return resultado;
+
+                    botaoProduto.click();
+                    await espera(700);
+
+                    const depoisProduto = cartoes();
+                    const chipProdutoDepois = chipProduto();
+
+                    resultado.produto = {
+                        url: window.location.search,
+                        cartoes: depoisProduto.length,
+                        todosSoja: depoisProduto.length > 0 &&
+                            depoisProduto.every(cartao => cartao.getAttribute('data-produto') === 'soja'),
+                        urlTemProduto: window.location.search.indexOf('produto=soja') !== -1,
+                        chipPressionado: !!chipProdutoDepois &&
+                            chipProdutoDepois.getAttribute('aria-pressed') === 'true'
+                    };
+
+                    const botaoEstado = chipEstado();
+                    if (!botaoEstado) return resultado;
+
+                    botaoEstado.click();
+                    await espera(700);
+
+                    const depoisEstado = cartoes();
+                    const chipEstadoDepois = chipEstado();
+
+                    resultado.estado = {
+                        url: window.location.search,
+                        cartoes: depoisEstado.length,
+                        todosMT: depoisEstado.length > 0 &&
+                            depoisEstado.every(cartao => cartao.getAttribute('data-uf') === 'MT'),
+                        urlTemEstado: window.location.search.indexOf('uf=MT') !== -1,
+                        urlTemProduto: window.location.search.indexOf('produto=soja') !== -1,
+                        chipPressionado: !!chipEstadoDepois &&
+                            chipEstadoDepois.getAttribute('aria-pressed') === 'true'
+                    };
+
+                    return resultado;
+                });
+            }
+
             const entry = {
                 url: target.url,
                 viewport: viewport.name,
@@ -1995,6 +2060,56 @@ async function main() {
                 }
                 if (dom.cotacoes.cartoes && !dom.cotacoes.chips) {
                     report.problems.push(label + ': ha cotacoes na tela mas o filtro por mercado nao apareceu');
+                }
+                if (dom.cotacoes.cartoes && !dom.cotacoes.chipsProduto) {
+                    report.problems.push(label + ': ha cotacoes na tela mas o filtro por produto nao apareceu');
+                }
+                if (dom.cotacoes.cartoes && !dom.cotacoes.chipsEstado) {
+                    report.problems.push(label + ': ha cotacoes na tela mas o filtro por estado nao apareceu');
+                }
+                if (dom.cotacoes.chipsProdutoExiste && !dom.cotacoes.filtroProdutoVisivel) {
+                    report.problems.push(label + ': o bloco do filtro por produto ficou escondido');
+                }
+                if (dom.cotacoes.chipsEstadoExiste && !dom.cotacoes.filtroEstadoVisivel) {
+                    report.problems.push(label + ': o bloco do filtro por estado ficou escondido');
+                }
+
+                /* O clique nos chips tem de filtrar a grade e anotar a escolha
+                   no endereco (a pagina pode ser linkada assim). */
+                const interacao = entry.interactions.filtroCotacoes;
+
+                if (interacao && interacao.cartoesIniciais > 0) {
+                    if (!interacao.produto) {
+                        report.problems.push(label + ': o filtro por produto nao respondeu ao clique');
+                    } else {
+                        if (!interacao.produto.urlTemProduto) {
+                            report.problems.push(label +
+                                ': escolher o produto nao colocou "produto=" no endereco');
+                        }
+                        if (!interacao.produto.todosSoja) {
+                            report.problems.push(label +
+                                ': o filtro por produto nao deixou na tela so as cotacoes de soja');
+                        }
+                        if (!interacao.produto.chipPressionado) {
+                            report.problems.push(label + ': o chip de produto escolhido nao ficou marcado');
+                        }
+                    }
+
+                    if (!interacao.estado) {
+                        report.problems.push(label + ': o filtro por estado nao respondeu ao clique');
+                    } else {
+                        if (!interacao.estado.urlTemEstado || !interacao.estado.urlTemProduto) {
+                            report.problems.push(label +
+                                ': escolher o estado nao deixou produto e estado no endereco');
+                        }
+                        if (!interacao.estado.todosMT) {
+                            report.problems.push(label +
+                                ': o filtro por estado nao deixou na tela so as cotacoes de MT');
+                        }
+                        if (!interacao.estado.chipPressionado) {
+                            report.problems.push(label + ': o chip de estado escolhido nao ficou marcado');
+                        }
+                    }
                 }
                 if (!dom.cotacoes.ctaExiste) {
                     report.problems.push(label + ': a chamada comercial das cotacoes ausente (.cot-cta-box)');

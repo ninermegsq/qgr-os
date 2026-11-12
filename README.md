@@ -208,8 +208,9 @@ npm run sitemap
 | --- | --- |
 | `index.html` | Página principal (sobre, serviços, produtos, contato) + sprite de ícones SVG inline + SEO (OG/JSON-LD) |
 | `noticias.html` | **Página exclusiva das notícias** do agronegócio (grade, **filtro por dia (lista abre no dia de hoje)**, filtro por categoria, "carregar mais" e SEO próprio) |
-| `cotacoes.html` | **Página exclusiva das cotações** do agro (grade de preços, filtro por mercado, "carregar mais", fontes citadas, CTA de WhatsApp e SEO próprio) |
-| `cotacoes.js` | Lê a tabela `cotacoes` do Supabase e desenha os cards (preço, variação, unidade, região, fonte e hora da coleta) só com `textContent`, monta o filtro por mercado, a paginação e o SEO |
+| `cotacoes.html` | **Página exclusiva das cotações** do agro (grade de preços, filtros por mercado, por produto e por estado, "carregar mais", fontes citadas, CTA de WhatsApp e SEO próprio) |
+| `cotacoes.js` | Lê a tabela `cotacoes` do Supabase e desenha os cards (preço, variação, unidade, região, fonte e hora da coleta) só com `textContent`, monta os filtros por mercado, por produto e por estado, a paginação e o SEO |
+| `classificacao-cotacoes.js` | **Regra única de classificação** (produto e estado): traduz o nome que a fonte publicou ("Soja · Janeiro 2027", "Farelo de soja (Chicago)") para a chave do filtro (`soja`, `farelo_soja`) e para a sigla do estado (MT, SP, PR…). É a mesma regra que o coletor grava no banco |
 | `noticia.html` | **Página da matéria**: o texto completo da notícia, hospedado no site (o visitante nunca é levado para fora), com SEO próprio (canonical, Open Graph, JSON-LD `NewsArticle`), crédito da fonte, **bloco compacto "O que você busca hoje?" com botão para a ficha de contato**, espaço patrocinado no fim e "Mais notícias" |
 | `noticia.js` | Carrega a matéria do banco e escreve na tela com `textContent` (nunca `innerHTML`), monta o SEO, conta a visualização, carrega o anúncio do fim e monta o link do botão de lead (escolha + contexto da matéria) |
 | `publicidade.html` | Política de transparência dos anúncios: o que é anúncio, o que a Q GRÃOS não endossa, autorização do anunciante, links `sponsored`, contadores e LGPD |
@@ -247,7 +248,7 @@ npm run sitemap
 | --- | --- | --- |
 | Home | `/` (`index.html`) | Hero, sobre, serviços, produtos, **convite para as notícias** e contato |
 | Notícias | `/noticias.html` | **A lista de notícias do agronegócio** (página própria, com SEO próprio), **filtro por dia (abre no dia de hoje)**, filtro de categoria e espaços patrocinados |
-| Cotações | `/cotacoes.html` | **A lista de cotações do agro** (página própria, com SEO próprio): preço físico (MT), regional, Chicago, B3, dólar e macro, com filtro por mercado, "carregar mais" e a origem de cada número |
+| Cotações | `/cotacoes.html` | **A lista de cotações do agro** (página própria, com SEO próprio): preço físico (MT), regional, Chicago, B3, dólar e macro, com filtros por **mercado**, **produto** (soja, milho, algodão…) e **estado** (MT, SP, PR…), "carregar mais" e a origem de cada número |
 | Matéria | `/noticia.html?id=…` | **A notícia inteira, hospedada no site**: texto completo, crédito da fonte, compartilhamento, **bloco "O que você busca hoje?" + botão para a ficha**, anúncio no fim e "Mais notícias" |
 | Publicidade | `/publicidade.html` | Política de transparência dos anúncios (como anunciar, o que a Q GRÃOS não endossa, LGPD) |
 | Erro 404 | `/404.html` | Página de erro com links para as seções e para as notícias |
@@ -508,11 +509,18 @@ número** escrita no card.
 
 | Objeto | Para que serve |
 | --- | --- |
-| `cotacoes` | Uma linha por cotação (`fonte`, `mercado`, `simbolo`, `produto`, `regiao`, `preco`, `preco_max`, `preco_min`, `variacao`, `variacao_abs`, `unidade`, `referencia`, `publicado`). Chave única `(fonte, simbolo)` |
+| `cotacoes` | Uma linha por cotação (`fonte`, `mercado`, `simbolo`, `produto`, `produto_chave`, `regiao`, `uf`, `preco`, `preco_max`, `preco_min`, `variacao`, `variacao_abs`, `unidade`, `referencia`, `publicado`). Chave única `(fonte, simbolo)`. `produto_chave` e `uf` são as colunas dos filtros de produto e de estado |
 | `cotacoes_fontes` | Saúde de cada fonte (`status`, `itens`, `coletado_em`) — alimenta o painel e o aviso da página |
 
 O visitante lê **só** as linhas com `publicado = true` (política RLS). A tabela de fontes é
 **restrita ao painel**: o anônimo não consegue nem ler.
+
+**Filtro de produto e de estado:** as colunas `produto_chave` (soja, milho, algodao, sorgo,
+farelo_soja, cafe, dolar, ibovespa, ouro, petroleo) e `uf` (MT, SP, PR…) foram criadas em
+`supabase/migrations/20261112103000_qg_cotacoes_produto_uf.sql` e já estão preenchidas nas 143
+cotações publicadas (119 com estado — Chicago, BM&F, B3 e o dólar/macro não têm estado de
+propósito). A regra de classificação mora em `classificacao-cotacoes.js` e é a mesma que o
+coletor grava a cada coleta.
 
 **Como rodar a coleta:**
 
@@ -533,9 +541,11 @@ node tools/coletar-cotacoes.js --dry-run --sql   # imprime o SQL pronto (formato
 preço, variação, data), o estado de cada fonte e deixa **publicar**, **despublicar** e **excluir**
 linha por linha.
 
-**Na página:** filtro por mercado (a escolha fica na URL, `?mercado=regional`), "carregar mais"
-(24 por vez) e, quando o filtro não tem resultado, `noindex` — o mesmo cuidado do portal de
-notícias.
+**Na página:** três filtros que se combinam — **mercado**, **produto** e **estado** — com a
+escolha no endereço (`?mercado=regional&produto=soja&uf=MT`), "carregar mais" (24 por vez) e,
+quando o filtro não tem resultado, `noindex` — o mesmo cuidado do portal de notícias. O número
+de cada chip conta só as cotações que passam pelos **outros** filtros, então a contagem muda a
+cada escolha.
 
 ## Dependências externas
 

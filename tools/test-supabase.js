@@ -430,13 +430,28 @@ async function principal() {
     /* 14. Area de cotacoes: o publico le so o que esta publicado -- */
     const cotacoes = await chamar(
         'GET',
-        '/rest/v1/cotacoes?select=id,fonte,mercado,simbolo,produto,preco,unidade,publicado' +
+        '/rest/v1/cotacoes?select=id,fonte,mercado,simbolo,produto,produto_chave,uf,preco,unidade,publicado' +
         '&publicado=eq.true&limit=20'
     );
 
     conferir('GET /cotacoes responde 200', cotacoes.status === 200, 'HTTP ' + cotacoes.status);
     conferir('GET /cotacoes devolve lista', Array.isArray(cotacoes.dados),
         Array.isArray(cotacoes.dados) ? cotacoes.dados.length + ' cotacao(oes)' : 'nao e lista');
+
+    /* As colunas dos filtros de produto e de estado tem de ser legiveis pelo publico */
+    const linhasCotacao = Array.isArray(cotacoes.dados) ? cotacoes.dados : [];
+    const semProdutoChave = linhasCotacao.filter(item => !item.produto_chave);
+    const comUf = linhasCotacao.filter(item => item.uf);
+
+    conferir('A chave anonima le a coluna produto_chave (filtro de produto)',
+        cotacoes.status === 200 && semProdutoChave.length === 0,
+        'HTTP ' + cotacoes.status + ', ' + linhasCotacao.length + ' linha(s), ' +
+        semProdutoChave.length + ' sem produto_chave');
+
+    conferir('A chave anonima le a coluna uf (filtro de estado)',
+        cotacoes.status === 200 && linhasCotacao.length > 0 && comUf.length > 0,
+        'HTTP ' + cotacoes.status + ', ' + comUf.length + ' com uf em ' +
+        linhasCotacao.length + ' linha(s)');
 
     /* Sem filtro de publicado: a RLS tem de barrar o que nao esta no ar */
     const todasCotacoes = await chamar(

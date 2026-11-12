@@ -8,13 +8,15 @@
  *
  * O que a pagina mostra:
  *   - a linha de status (quando os numeros foram atualizados);
- *   - o filtro por mercado (com a contagem de cada um);
+ *   - os filtros por mercado, por produto e por estado (com a
+ *     contagem de cada opcao);
  *   - o card de cada cotacao (preco, variacao, unidade, regiao,
  *     fonte e hora da coleta);
  *   - o aviso honesto quando ainda nao existe nenhuma cotacao.
  *
- * A escolha do filtro fica no endereco (?mercado=spot), para a pagina
- * poder ser linkada e compartilhada.
+ * A escolha dos filtros fica no endereco (?mercado=spot&produto=soja
+ * &uf=MT), para a pagina poder ser linkada e compartilhada. Os tres
+ * filtros se combinam: mercado + produto + estado.
  * ------------------------------------------------------------------ */
 
 (function () {
@@ -31,6 +33,15 @@
         { valor: 'macro', rotulo: 'Macro' }
     ];
 
+    /* A regra de classificacao (produto e estado) vem do arquivo
+       classificacao-cotacoes.js: e a mesma que o coletor grava no
+       banco. Sem ele, os filtros de produto e estado nao aparecem. */
+    const CLASSIFICACAO = window.QGClassificacao || null;
+
+    /* Produtos e estados que o filtro oferece */
+    const PRODUTOS = CLASSIFICACAO ? CLASSIFICACAO.PRODUTOS : [];
+    const ESTADOS = CLASSIFICACAO ? CLASSIFICACAO.ESTADOS : [];
+
     /* Como o nome da fonte aparece no card */
     const ROTULO_FONTE = {
         imea: 'IMEA',
@@ -40,6 +51,12 @@
 
     /* Mercado escolhido pelo leitor (vazio = todos) */
     let mercadoSelecionado = '';
+
+    /* Produto escolhido pelo leitor (vazio = todos) */
+    let produtoSelecionado = '';
+
+    /* Estado escolhido pelo leitor (vazio = todos) */
+    let estadoSelecionado = '';
 
     /* Todas as cotacoes publicadas (a memoria da pagina) */
     let cotacoes = [];
@@ -132,6 +149,18 @@
         return achado ? achado.rotulo : (valor || 'Cotacao');
     }
 
+    function rotuloProduto(valor) {
+        if (!valor) return '';
+
+        return CLASSIFICACAO ? CLASSIFICACAO.rotuloProduto(valor) : valor;
+    }
+
+    function rotuloEstado(valor) {
+        if (!valor) return '';
+
+        return CLASSIFICACAO ? CLASSIFICACAO.rotuloEstado(valor) : valor;
+    }
+
     /* --------------------------------------------------------------
      * Status (quando os numeros foram atualizados)
      * -------------------------------------------------------------- */
@@ -141,9 +170,14 @@
         if (linha) linha.textContent = texto;
     }
 
-    function atualizarStatus(lista) {
+    /* A linha de status: quantas cotações estão na tela, de quantas
+       fontes e de quando são. Com filtro ligado, ela mostra também
+       o que o leitor escolheu. */
+    function atualizarStatus(lista, totalGeral) {
         if (!lista.length) {
-            escreverStatus('Nenhuma cotacao publicada ate agora.');
+            escreverStatus(cotacoes.length
+                ? 'Nenhuma cotacao no filtro escolhido.'
+                : 'Nenhuma cotacao publicada ate agora.');
             return;
         }
 
@@ -159,12 +193,37 @@
 
         const totalFontes = Object.keys(fontes).length;
         const quando = formatarDataHora(maisRecente);
+        const descricao = descricaoFiltros();
 
-        const texto = lista.length + (lista.length === 1 ? ' cotacao' : ' cotacoes') +
-            ' de ' + totalFontes + (totalFontes === 1 ? ' fonte' : ' fontes') +
-            (quando ? ' - atualizada' + (lista.length === 1 ? '' : 's') + ' em ' + quando : '');
+        const partes = [];
 
-        escreverStatus(texto + '.');
+        if (totalGeral && lista.length !== totalGeral) {
+            partes.push('Mostrando ' + lista.length + ' de ' + totalGeral +
+                (totalGeral === 1 ? ' cotacao' : ' cotacoes'));
+        } else {
+            partes.push(lista.length + (lista.length === 1 ? ' cotacao' : ' cotacoes'));
+        }
+
+        partes.push(totalFontes + (totalFontes === 1 ? ' fonte' : ' fontes'));
+
+        if (descricao) partes.push(descricao);
+
+        if (quando) {
+            partes.push('atualizada' + (lista.length === 1 ? '' : 's') + ' em ' + quando);
+        }
+
+        escreverStatus(partes.join(' · ') + '.');
+    }
+
+    /* O que está escolhido no filtro (mercado, produto e estado) */
+    function descricaoFiltros() {
+        const partes = [];
+
+        if (mercadoSelecionado) partes.push('mercado: ' + rotuloMercado(mercadoSelecionado));
+        if (produtoSelecionado) partes.push('produto: ' + rotuloProduto(produtoSelecionado));
+        if (estadoSelecionado) partes.push('estado: ' + rotuloEstado(estadoSelecionado));
+
+        return partes.join(' · ');
     }
 
     function atualizarResumoHero(lista) {
@@ -194,6 +253,8 @@
     function criarCardCotacao(cotacao) {
         const card = elemento('article', 'cot-card');
         card.setAttribute('data-mercado', cotacao.mercado || '');
+        card.setAttribute('data-produto', cotacao.produtoChave || '');
+        card.setAttribute('data-uf', cotacao.uf || '');
 
         /* Topo: mercado + fonte */
         const topo = elemento('header', 'cot-card-topo');
@@ -204,8 +265,14 @@
         /* Produto e regiao */
         card.appendChild(elemento('h3', 'cot-produto', cotacao.produto || cotacao.simbolo || ''));
 
-        if (cotacao.regiao) {
-            card.appendChild(elemento('p', 'cot-regiao', cotacao.regiao));
+        /* Região e (quando existe) a sigla do estado */
+        if (cotacao.regiao || cotacao.uf) {
+            const regiao = elemento('p', 'cot-regiao');
+
+            if (cotacao.regiao) regiao.appendChild(document.createTextNode(cotacao.regiao));
+            if (cotacao.uf) regiao.appendChild(elemento('span', 'cot-uf', cotacao.uf));
+
+            card.appendChild(regiao);
         }
 
         /* Preco + unidade */
@@ -298,22 +365,42 @@
     }
 
     /* --------------------------------------------------------------
-     * Filtro por mercado
+     * Filtros: mercado, produto e estado
+     * --------------------------------------------------------------
+     * Os tres filtros andam juntos: o leitor pode pedir "soja" e
+     * "Mato Grosso" ao mesmo tempo. Cada chip mostra quantas cotacoes
+     * continuam depois dos outros filtros — e por isso que a contagem
+     * muda quando o leitor escolhe outra coisa.
+     *
+     * A escolha fica no endereco (?mercado=spot&produto=soja&uf=MT),
+     * para a pagina poder ser linkada e compartilhada.
      * -------------------------------------------------------------- */
 
-    function lerMercadoDaUrl() {
+    function lerFiltrosDaUrl() {
         const parametros = new URLSearchParams(window.location.search);
-        const bruto = (parametros.get('mercado') || '').trim();
 
-        const achado = MERCADOS.find(item => item.valor === bruto);
-        return achado ? achado.valor : '';
+        const mercado = (parametros.get('mercado') || '').trim();
+        const produto = (parametros.get('produto') || '').trim();
+        const uf = (parametros.get('uf') || '').trim().toUpperCase();
+
+        return {
+            mercado: MERCADOS.some(item => item.valor === mercado) ? mercado : '',
+            produto: PRODUTOS.some(item => item.valor === produto) ? produto : '',
+            uf: ESTADOS.some(item => item.valor === uf) ? uf : ''
+        };
     }
 
-    function escreverMercadoNaUrl() {
+    function escreverFiltrosNaUrl() {
         const parametros = new URLSearchParams(window.location.search);
 
         if (mercadoSelecionado) parametros.set('mercado', mercadoSelecionado);
         else parametros.delete('mercado');
+
+        if (produtoSelecionado) parametros.set('produto', produtoSelecionado);
+        else parametros.delete('produto');
+
+        if (estadoSelecionado) parametros.set('uf', estadoSelecionado);
+        else parametros.delete('uf');
 
         const consulta = parametros.toString();
         const novaUrl = window.location.pathname +
@@ -323,10 +410,70 @@
         window.history.replaceState(null, '', novaUrl);
     }
 
-    function criarChipMercado(valor, rotulo, total, selecionado) {
+    /* O valor de cada dimensao (serve para contar e para filtrar) */
+    function valorDaDimensao(cotacao, dimensao) {
+        if (dimensao === 'mercado') return cotacao.mercado || '';
+        if (dimensao === 'produto') return cotacao.produtoChave || '';
+
+        return cotacao.uf || '';
+    }
+
+    /* A cotacao passa pelo filtro? "ignorar" deixa uma dimensao de
+       fora da conta — e assim que se conta as opcoes de cada chip. */
+    function combina(cotacao, filtros, ignorar) {
+        if (ignorar !== 'mercado' && filtros.mercado &&
+            cotacao.mercado !== filtros.mercado) return false;
+
+        if (ignorar !== 'produto' && filtros.produto &&
+            (cotacao.produtoChave || '') !== filtros.produto) return false;
+
+        if (ignorar !== 'uf' && filtros.uf &&
+            (cotacao.uf || '') !== filtros.uf) return false;
+
+        return true;
+    }
+
+    function dimensoes() {
+        return {
+            mercado: mercadoSelecionado,
+            produto: produtoSelecionado,
+            uf: estadoSelecionado
+        };
+    }
+
+    /* A lista que o leitor esta vendo agora */
+    function cotacoesFiltradas() {
+        const filtros = dimensoes();
+
+        return cotacoes.filter(item => combina(item, filtros, ''));
+    }
+
+    /* Quantas cotacoes cada opcao mostra (contando so as que passam
+       pelos outros filtros) */
+    function contarPor(dimensao) {
+        const filtros = dimensoes();
+        const contagem = {};
+
+        cotacoes.forEach(item => {
+            if (!combina(item, filtros, dimensao)) return;
+
+            const chave = valorDaDimensao(item, dimensao);
+            contagem[chave] = (contagem[chave] || 0) + 1;
+        });
+
+        return contagem;
+    }
+
+    function totalDaDimensao(dimensao) {
+        const filtros = dimensoes();
+
+        return cotacoes.filter(item => combina(item, filtros, dimensao)).length;
+    }
+
+    function criarChip(dimensao, valor, rotulo, total, selecionado) {
         const botao = elemento('button', 'filtro-chip');
         botao.type = 'button';
-        botao.setAttribute('data-mercado', valor);
+        botao.setAttribute('data-' + dimensao, valor);
         botao.setAttribute('aria-pressed', selecionado ? 'true' : 'false');
 
         botao.appendChild(document.createTextNode(rotulo));
@@ -341,19 +488,15 @@
 
         if (!caixa) return;
 
-        const contagem = {};
-
-        cotacoes.forEach(item => {
-            const chave = item.mercado || '';
-            contagem[chave] = (contagem[chave] || 0) + 1;
-        });
+        const contagem = contarPor('mercado');
 
         limpar(caixa);
 
-        caixa.appendChild(criarChipMercado(
+        caixa.appendChild(criarChip(
+            'mercado',
             '',
             'Todas',
-            cotacoes.length,
+            totalDaDimensao('mercado'),
             !mercadoSelecionado
         ));
 
@@ -365,7 +508,8 @@
                aparece sempre: sem o chip nao haveria como desmarcar. */
             if (!total && !selecionado) return;
 
-            caixa.appendChild(criarChipMercado(
+            caixa.appendChild(criarChip(
+                'mercado',
                 mercado.valor,
                 mercado.rotulo,
                 total,
@@ -376,31 +520,127 @@
         if (bloco) bloco.hidden = false;
     }
 
-    function alternarMercado(valor) {
-        mercadoSelecionado = (mercadoSelecionado === valor) ? '' : valor;
+    function montarChipsProduto() {
+        const caixa = document.getElementById('cotChipsProduto');
+        const bloco = document.getElementById('cotFiltroProduto');
 
+        if (!caixa || !PRODUTOS.length) return;
+
+        const contagem = contarPor('produto');
+
+        limpar(caixa);
+
+        caixa.appendChild(criarChip(
+            'produto',
+            '',
+            'Todos',
+            totalDaDimensao('produto'),
+            !produtoSelecionado
+        ));
+
+        let quantos = 0;
+
+        PRODUTOS.forEach(produto => {
+            const total = contagem[produto.valor] || 0;
+            const selecionado = produtoSelecionado === produto.valor;
+
+            if (!total && !selecionado) return;
+
+            quantos++;
+
+            caixa.appendChild(criarChip(
+                'produto',
+                produto.valor,
+                produto.rotulo,
+                total,
+                selecionado
+            ));
+        });
+
+        /* Sem produto nenhum, o bloco fica escondido */
+        if (bloco) bloco.hidden = quantos === 0;
+    }
+
+    function montarChipsEstado() {
+        const caixa = document.getElementById('cotChipsEstado');
+        const bloco = document.getElementById('cotFiltroEstado');
+
+        if (!caixa || !ESTADOS.length) return;
+
+        const contagem = contarPor('uf');
+
+        limpar(caixa);
+
+        caixa.appendChild(criarChip(
+            'uf',
+            '',
+            'Todos',
+            totalDaDimensao('uf'),
+            !estadoSelecionado
+        ));
+
+        let quantos = 0;
+
+        ESTADOS.forEach(estado => {
+            const total = contagem[estado.valor] || 0;
+            const selecionado = estadoSelecionado === estado.valor;
+
+            if (!total && !selecionado) return;
+
+            quantos++;
+
+            caixa.appendChild(criarChip(
+                'uf',
+                estado.valor,
+                estado.rotulo,
+                total,
+                selecionado
+            ));
+        });
+
+        if (bloco) bloco.hidden = quantos === 0;
+    }
+
+    function montarChips() {
         montarChipsMercado();
-        escreverMercadoNaUrl();
+        montarChipsProduto();
+        montarChipsEstado();
+    }
+
+    function alternarFiltro(dimensao, valor) {
+        if (dimensao === 'mercado') {
+            mercadoSelecionado = (mercadoSelecionado === valor) ? '' : valor;
+        } else if (dimensao === 'produto') {
+            produtoSelecionado = (produtoSelecionado === valor) ? '' : valor;
+        } else {
+            estadoSelecionado = (estadoSelecionado === valor) ? '' : valor;
+        }
+
+        montarChips();
+        escreverFiltrosNaUrl();
         desenharGrade();
     }
 
-    function prepararFiltroMercado() {
-        const caixa = document.getElementById('cotChips');
+    function prepararFiltro(idCaixa, dimensao) {
+        const caixa = document.getElementById(idCaixa);
         if (!caixa) return;
 
+        const seletor = 'button[data-' + dimensao + ']';
+
         caixa.addEventListener('click', evento => {
-            const botao = evento.target.closest('button[data-mercado]');
+            const alvo = evento.target;
+            if (!alvo || !alvo.closest) return;
+
+            const botao = alvo.closest(seletor);
             if (!botao) return;
 
-            alternarMercado(botao.getAttribute('data-mercado'));
+            alternarFiltro(dimensao, botao.getAttribute('data-' + dimensao));
         });
 
         caixa.addEventListener('keydown', evento => {
             if (evento.key !== 'ArrowRight' && evento.key !== 'ArrowLeft') return;
 
-            const chips = Array.prototype.slice.call(
-                caixa.querySelectorAll('button[data-mercado]')
-            );
+            const chips = Array.prototype.slice.call(caixa.querySelectorAll(seletor));
 
             const atual = chips.indexOf(document.activeElement);
             if (atual === -1) return;
@@ -431,9 +671,7 @@
         const grade = document.getElementById('cotGrid');
         if (!grade) return;
 
-        const lista = mercadoSelecionado
-            ? cotacoes.filter(item => item.mercado === mercadoSelecionado)
-            : cotacoes;
+        const lista = cotacoesFiltradas();
 
         if (!lista.length) {
             cotacoesVisiveis = 0;
@@ -441,6 +679,8 @@
                 ? 'Nenhuma cotacao no filtro escolhido.'
                 : 'Ainda nao publicamos cotacoes. Assim que a coleta do dia rodar, elas aparecem aqui.');
             atualizarBotaoMais(lista);
+            atualizarStatus(lista, cotacoes.length);
+            atualizarSeo(lista.length > 0);
             return;
         }
 
@@ -455,6 +695,8 @@
 
         cotacoesVisiveis = mostrar;
         atualizarBotaoMais(lista);
+        atualizarStatus(lista, cotacoes.length);
+        atualizarSeo(true);
     }
 
     /* O botao so aparece quando ainda ha cotacao para carregar */
@@ -474,9 +716,7 @@
         const grade = document.getElementById('cotGrid');
         if (!grade) return;
 
-        const lista = mercadoSelecionado
-            ? cotacoes.filter(item => item.mercado === mercadoSelecionado)
-            : cotacoes;
+        const lista = cotacoesFiltradas();
 
         if (cotacoesVisiveis >= lista.length) return;
 
@@ -506,19 +746,50 @@
         const robots = document.querySelector('meta[name="robots"]');
 
         const base = 'https://qgraos.com.br/cotacoes.html';
-        const filtrada = mercadoSelecionado
-            ? base + '?mercado=' + encodeURIComponent(mercadoSelecionado)
-            : base;
+        const parametros = [];
 
-        const semResultado = Boolean(mercadoSelecionado) && !temResultados;
+        if (mercadoSelecionado) parametros.push('mercado=' + encodeURIComponent(mercadoSelecionado));
+        if (produtoSelecionado) parametros.push('produto=' + encodeURIComponent(produtoSelecionado));
+        if (estadoSelecionado) parametros.push('uf=' + encodeURIComponent(estadoSelecionado));
+
+        const filtrada = parametros.length ? base + '?' + parametros.join('&') : base;
+        const temFiltro = parametros.length > 0;
+        const semResultado = temFiltro && !temResultados;
 
         if (canonical) canonical.setAttribute('href', semResultado ? base : filtrada);
-        if (robots) robots.setAttribute('content', semResultado ? 'noindex, follow' : 'index, follow');
+        if (robots) {
+            robots.setAttribute('content', semResultado
+                ? 'noindex, follow'
+                : 'index, follow, max-image-preview:large');
+        }
     }
 
     /* --------------------------------------------------------------
      * Carga
      * -------------------------------------------------------------- */
+
+    /* As colunas do banco. As duas do filtro (produto_chave e uf) so
+       existem depois da migration; se o banco ainda nao tiver, a
+       pagina usa a regra local (classificacao-cotacoes.js). */
+    const CAMPOS = 'fonte,mercado,simbolo,produto,produto_chave,uf,regiao,preco,preco_max,preco_min,' +
+        'variacao,variacao_abs,unidade,referencia,atualizado_em';
+
+    const CAMPOS_SEM_CLASSIFICACAO = 'fonte,mercado,simbolo,produto,regiao,preco,preco_max,preco_min,' +
+        'variacao,variacao_abs,unidade,referencia,atualizado_em';
+
+    /* Cada linha ganha a chave do produto e a sigla do estado: o
+       banco e a fonte; a regra local e a reserva. */
+    function classificar(linhas) {
+        return linhas.map(linha => {
+            linha.produtoChave = linha.produto_chave ||
+                (CLASSIFICACAO ? CLASSIFICACAO.chaveProduto(linha.produto) : '');
+
+            linha.uf = linha.uf ||
+                (CLASSIFICACAO ? CLASSIFICACAO.chaveEstado(linha.fonte, linha.regiao) : '');
+
+            return linha;
+        });
+    }
 
     function carregarCotacoes() {
         const cliente = window.QGSupabase;
@@ -529,23 +800,29 @@
             return Promise.resolve([]);
         }
 
-        const campos = 'fonte,mercado,simbolo,produto,regiao,preco,preco_max,preco_min,' +
-            'variacao,variacao_abs,unidade,referencia,atualizado_em';
-
-        const consulta = 'select=' + campos +
+        const consulta = campos => 'select=' + campos +
             '&publicado=eq.true' +
             '&order=mercado.asc,produto.asc' +
             '&limit=500';
 
-        return cliente.select('cotacoes', consulta)
-            .then(linhas => {
-                cotacoes = Array.isArray(linhas) ? linhas : [];
+        return cliente.select('cotacoes', consulta(CAMPOS))
+            .catch(erro => {
+                /* Banco sem as colunas do filtro: a pagina continua
+                   funcionando, classificando o nome aqui. */
+                const mensagem = String((erro && erro.message) || '');
 
-                atualizarStatus(cotacoes);
+                if (!/produto_chave|\bcoluna\b|\bcolumn\b/i.test(mensagem)) throw erro;
+
+                console.warn('Q GRAOS: o banco ainda nao tem produto_chave/uf; usando a regra local.');
+
+                return cliente.select('cotacoes', consulta(CAMPOS_SEM_CLASSIFICACAO));
+            })
+            .then(linhas => {
+                cotacoes = classificar(Array.isArray(linhas) ? linhas : []);
+
                 atualizarResumoHero(cotacoes);
-                montarChipsMercado();
+                montarChips();
                 desenharGrade();
-                atualizarSeo(cotacoes.length > 0);
 
                 return cotacoes;
             })
@@ -567,9 +844,15 @@
     function iniciar() {
         if (!document.getElementById('cotGrid')) return;
 
-        mercadoSelecionado = lerMercadoDaUrl();
+        const filtros = lerFiltrosDaUrl();
 
-        prepararFiltroMercado();
+        mercadoSelecionado = filtros.mercado;
+        produtoSelecionado = filtros.produto;
+        estadoSelecionado = filtros.uf;
+
+        prepararFiltro('cotChips', 'mercado');
+        prepararFiltro('cotChipsProduto', 'produto');
+        prepararFiltro('cotChipsEstado', 'uf');
         prepararBotaoMais();
         carregarCotacoes();
     }

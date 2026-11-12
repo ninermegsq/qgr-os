@@ -34,6 +34,7 @@ Histórico do schema do Supabase, na ordem em que foi aplicado no projeto
 | `20261112093000_qg_cotacoes_carga_imea.sql` | **Carga inicial do IMEA.** Publica os 86 preços de grão do IMEA (soja, milho e algodão em Mato Grosso e outros estados), com `preco_max`, `preco_min` e variação. Só entram indicadores de preço de grão: semente, frete, óleo, farelo e custos são descartados pelo coletor. |
 | `20261112094000_qg_cotacoes_carga_grao_direto_investing.sql` | **Carga inicial do Grão Direto e do Investing.com.** Publica as cotações regionais e de futuros do Grão Direto (33 regionais, 8 futuros, 5 da B3 e 1 de câmbio) e as do Investing.com (5 futuros, 1 da B3, 1 de câmbio e 3 macro). |
 | `20261112095000_qg_cotacoes_fontes_carga.sql` | **Estado das fontes.** Registra as três fontes em `cotacoes_fontes` com o resultado da coleta (quantidade de itens e data). Tabela interna: só o painel enxerga. |
+| `20261112103000_qg_cotacoes_produto_uf.sql` | **Filtros de produto e de estado.** Adiciona `public.cotacoes.produto_chave` (soja, milho, algodao, sorgo, farelo_soja, cafe, dolar, ibovespa, ouro, petroleo) e `public.cotacoes.uf` (sigla do estado), com índice em cada coluna, e preenche as 143 cotações publicadas (143 com produto, 119 com estado — Chicago, BM&F, B3 e o dólar/macro não têm estado). É idempotente e a mesma regra de classificação fica no `classificacao-cotacoes.js`, que o coletor usa a cada nova coleta. |
 
 ## Aplicar em outro ambiente
 

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notícia do Agronegócio | Q GRÃOS</title>
+    <meta name="description"
+        content="Notícia do agronegócio publicada pela equipe Q GRÃOS: grãos, safra, frete, preços, logística e seguro de cargas.">
+    <meta name="author" content="Q GRÃOS - Corretora de Grãos">
+    <meta name="theme-color" content="#0F3D2E">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="geo.region" content="BR-MT">
+    <meta name="geo.placename" content="Mato Grosso">
+
+    <!-- O endereco canonico recebe o id da noticia por JS: uma pagina
+         por noticia, sem duplicar conteudo no Google -->
+    <link rel="canonical" href="https://qgraos.com.br/noticia.html">
+
+    <!-- Open Graph / Twitter Card: como a materia aparece quando o link
+         e compartilhado (inclusive no WhatsApp, que e onde o trafego chega) -->
+    <meta property="og:type" content="article">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:site_name" content="Q GRÃOS">
+    <meta property="og:url" content="https://qgraos.com.br/noticia.html">
+    <meta property="og:title" content="Notícia do Agronegócio | Q GRÃOS">
+    <meta property="og:description"
+        content="Grãos, safra, frete e preços: o que importa para quem compra e vende carga.">
+    <meta property="og:image" content="https://qgraos.com.br/assets/hero_bg.png">
+    <meta property="og:image:alt" content="Q GRAOS - Corretora de Graos">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Notícia do Agronegócio | Q GRÃOS">
+    <meta name="twitter:description"
+        content="Grãos, safra, frete e preços: o que importa para quem compra e vende carga.">
+    <meta name="twitter:image" content="https://qgraos.com.br/assets/hero_bg.png">
+
+    <!-- Dados estruturados: o Google usa isto para mostrar a materia
+         como noticia (com data, capa e autor). O JS preenche com os dados
+         reais da noticia carregada. -->
+    <script type="application/ld+json" id="noticiaLdJson">
+        {
+            "@context": "https://schema.org",
+            "@type": "NewsArticle",
+            "headline": "Notícia do Agronegócio | Q GRÃOS",
+            "description": "Notícia do agronegócio publicada pela equipe Q GRÃOS.",
+            "url": "https://qgraos.com.br/noticia.html",
+            "inLanguage": "pt-BR",
+            "datePublished": "",
+            "image": "https://qgraos.com.br/assets/hero_bg.png",
+            "articleSection": "Geral",
+            "isPartOf": {
+                "@type": "WebSite",
+                "name": "Q GRÃOS",
+                "url": "https://qgraos.com.br/"
+            },
+            "publisher": {
+                "@type": "Organization",
+                "name": "Q GRÃOS",
+                "url": "https://qgraos.com.br/",
+                "email": "contato@qgraos.com.br",
+                "telephone": "+55-66-99228-1757",
+                "vatID": "62.793.851/0001-96"
+            }
+        }
+    </script>
+
+    <!-- Styles locais: carregam primeiro e o site funciona mesmo sem internet.
+         O "?v=" evita que o navegador use uma versao antiga em cache. -->
+    <link rel="stylesheet" href="style.css?v=13">
+
+    <!-- Favicon em SVG inline: evita requisição extra e erro 404 -->
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230F3D2E'/><circle cx='31' cy='29' r='15' fill='none' stroke='%23D4AF37' stroke-width='6'/><path d='M40 39l11 12' stroke='%23D4AF37' stroke-width='6' stroke-linecap='round'/></svg>">
+
+    <!-- Fontes: carregamento não bloqueante (se o CDN falhar, usa a fonte do sistema) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap"
+        rel="stylesheet" media="print" onload="this.media='all'">
+</head>
+
+<body class="page-noticias">
+    <!-- Sprite de ícones em SVG inline: sem CDN, sem requisição extra, funciona offline -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden"
+        aria-hidden="true" focusable="false">
+        <symbol id="ic-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20.5v-6.2" />
+            <path d="M12 14.3C12 10.6 9.8 8 6 8c0 3.7 2.2 6.3 6 6.3Z" />
+            <path d="M12 12.6c0-4 2.5-6.8 6.3-6.8 0 4-2.6 6.8-6.3 6.8Z" />
+        </symbol>
+        <symbol id="ic-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.5 12h14" />
+            <path d="m13 6.2 5.8 5.8-5.8 5.8" />
+        </symbol>
+        <symbol id="ic-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9.4 4.8 7.2 7.2-7.2 7.2" />
+        </symbol>
+        <symbol id="ic-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2.8 4.8 5.9v5.6c0 4.4 3 8.4 7.2 9.7 4.2-1.3 7.2-5.3 7.2-9.7V5.9Z" />
+            <path d="m8.8 12 2.2 2.2 4.2-4.4" />
+        </symbol>
+        <symbol id="ic-bolt" viewBox="0 0 24 24">
+            <path fill="currentColor" stroke="none" d="M13.6 2 5.4 13.1h5L9.8 22 18.6 10.6h-5.1Z" />
+        </symbol>
+        <symbol id="ic-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21.4S19 15 19 10.2a7 7 0 1 0-14 0C5 15 12 21.4 12 21.4Z" />
+            <circle cx="12" cy="10" r="2.6" />
+        </symbol>
+        <symbol id="ic-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.8 3.6h3.1l1.9 4.8-2.2 1.4a12.4 12.4 0 0 0 5.6 5.6l1.4-2.2 4.8 1.9v3.1a2 2 0 0 1-2.2 2A16.8 16.8 0 0 1 2.8 5.8a2 2 0 0 1 2-2.2Z" />
+        </symbol>
+        <symbol id="ic-envelope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2.8" y="5.2" width="18.4" height="13.6" rx="2.2" />
+            <path d="m3.6 6.8 8.4 6 8.4-6" />
+        </symbol>
+        <symbol id="ic-whatsapp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3.1a8.9 8.9 0 0 0-7.7 13.5L3 21l4.5-1.2A8.9 8.9 0 1 0 12 3.1Z" />
+            <g transform="translate(6.6 6.4) scale(0.45)">
+                <path stroke-width="4"
+                    d="M4.8 3.6h3.1l1.9 4.8-2.2 1.4a12.4 12.4 0 0 0 5.6 5.6l1.4-2.2 4.8 1.9v3.1a2 2 0 0 1-2.2 2A16.8 16.8 0 0 1 2.8 5.8a2 2 0 0 1 2-2.2Z" />
+            </g>
+        </symbol>
+        <symbol id="ic-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="8.6" />
+            <path d="M12 7.2V12l3.2 2" />
+        </symbol>
+        <symbol id="ic-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="17.6" cy="5.6" r="2.8" />
+            <circle cx="6.4" cy="12" r="2.8" />
+            <circle cx="17.6" cy="18.4" r="2.8" />
+            <path d="m8.9 10.6 6.2-3.6M8.9 13.4l6.2 3.6" />
+        </symbol>
+    </svg>
+
+    <!-- Navegação (sem botão de WhatsApp no cabeçalho) -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">Q <span class="highlight">GRÃOS</span></a>
+            <div class="nav-right">
+                <div class="nav-links" id="navLinks">
+                    <a href="index.html">Início</a>
+                    <a href="index.html#about">Sobre</a>
+                    <a href="index.html#services">Serviços</a>
+                    <a href="index.html#products">Produtos</a>
+                    <a href="noticias.html" aria-current="page">Notícias</a>
+                    <a href="index.html#contact">Contato</a>
+                </div>
+                <button class="hamburger" type="button" aria-label="Abrir menu" aria-expanded="false"
+                    aria-controls="navLinks">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pagina-noticia">
+        <!-- ================= A MATÉRIA ================= -->
+        <article class="noticia-artigo" id="noticiaArtigo">
+            <div class="container">
+                <!-- Trilha de navegação -->
+                <nav class="trilha" aria-label="Você está aqui">
+                    <a href="index.html">Início</a>
+                    <svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#ic-chevron-right"></use>
+                    </svg>
+                    <a href="noticias.html">Notícias</a>
+                    <svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#ic-chevron-right"></use>
+                    </svg>
+                    <span id="noticiaTrilhaCategoria">Matéria</span>
+                </nav>
+
+                <!-- Estado de erro: id inválido ou matéria não publicada -->
+                <div class="noticia-estado" id="noticiaErro" hidden>
+                    <span class="noticia-estado-mark">
+                        <svg class="ic" aria-hidden="true" focusable="false">
+                            <use href="#ic-sprout"></use>
+                        </svg>
+                    </span>
+                    <h1 id="noticiaErroTitulo">Notícia não encontrada</h1>
+                    <p id="noticiaErroTexto">
+                        Este endereço de notícia não existe ou a publicação já saiu do ar.
+                        Escolha uma das notícias mais recentes.
+                    </p>
+                    <a href="noticias.html" class="btn-primary">
+                        <svg class="ic" aria-hidden="true" focusable="false">
+                            <use href="#ic-arrow-right"></use>
+                        </svg>
+                        Ver todas as notícias
+                    </a>
+                </div>
+
+                <!-- A matéria (preenchida por JS com o conteúdo do banco) -->
+                <div id="noticiaConteudo" hidden>
+                    <header class="noticia-cabecalho">
+                        <div class="news-meta">
+                            <a class="news-category" id="noticiaCategoria" href="noticias.html">Geral</a>
+                            <time class="news-date" id="noticiaData"></time>
+                            <span class="noticia-leitura">
+                                <svg class="ic" aria-hidden="true" focusable="false">
+                                    <use href="#ic-clock"></use>
+                                </svg>
+                                <span id="noticiaTempoLeitura">1 min de leitura</span>
+                            </span>
+                        </div>
+
+                        <h1 id="noticiaTitulo">Notícia</h1>
+                        <p class="noticia-resumo" id="noticiaResumo"></p>
+                    </header>
+
+                    <figure class="noticia-capa" id="noticiaCapa" hidden></figure>
+
+                    <div class="noticia-corpo" id="noticiaCorpo"></div>
+
+                    <!-- Crédito da fonte original: texto, sem link.
+                         O visitante não sai do site por causa do crédito. -->
+                    <p class="noticia-credito" id="noticiaCredito" hidden></p>
+
+                    <div class="noticia-acoes">
+                        <a class="btn-primary" id="noticiaCompartilhar" href="#" target="_blank"
+                            rel="noopener noreferrer">
+                            <svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-share"></use>
+                            </svg>
+                            <span id="noticiaCompartilharTexto">Compartilhar no WhatsApp</span>
+                        </a>
+                        <a class="link-arrow" href="noticias.html">
+                            Voltar para as notícias
+                            <svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-arrow-right"></use>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <!-- ================= ANÚNCIO ================= -->
+        <!-- Faixa patrocinada: aparece aqui quando existe anuncio
+             publicado para a posicao "noticia". -->
+        <section class="noticia-anuncio container" id="noticiaAnuncio" hidden aria-label="Publicidade"></section>
+
+        <!-- ================= O QUE VOCÊ BUSCA HOJE? ================= -->
+        <!-- Chamada compacta do fim da matéria: o visitante escolhe o
+             que procura e o botão leva para a ficha de contato, com a
+             opção já marcada e a mensagem com o contexto da matéria.
+             Não é link direto para o WhatsApp: o lead passa pela
+             ficha e fica gravado no painel. -->
+        <section class="noticia-lead" id="leadMateria">
+            <div class="container">
+                <div class="noticia-lead-box">
+                    <div class="noticia-lead-texto">
+                        <label class="noticia-lead-rotulo" for="noticiaBusca">O que você busca hoje?</label>
+                        <select id="noticiaBusca" class="noticia-lead-select" name="busca">
+                            <option value="">Selecione</option>
+                            <option value="Grãos">Grãos</option>
+                            <option value="CTE + MDF-e">CTE + MDF-e</option>
+                            <option value="Agenciamento de cargas">Agenciamento de cargas</option>
+                            <option value="Seguro de cargas">Seguro de cargas</option>
+                        </select>
+                    </div>
+                    <a id="noticiaLeadBotao" class="noticia-lead-botao" href="index.html#contact">
+                        <svg class="ic" aria-hidden="true" focusable="false">
+                            <use href="#ic-whatsapp"></use>
+                        </svg>
+                        <span>WhatsApp</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= MAIS NOTÍCIAS ================= -->
+        <section class="news news-page" id="maisNoticias">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Mais <span class="highlight">notícias</span></h2>
+                    <p>O que mais importa para quem compra e vende carga.</p>
+                </div>
+
+                <div class="news-grid" id="newsMaisGrid" aria-live="polite">
+                    <p class="news-empty" id="newsMaisEmpty">Carregando as últimas notícias…</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Rodapé -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-col">
+                    <a href="index.html" class="logo">Q <span class="highlight">GRÃOS</span></a>
+                    <p>Sua parceira completa no agronegócio. Conectando quem produz a quem precisa, com segurança,
+                        agilidade e confiança.</p>
+                    <div class="footer-badges">
+                        <span><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-shield"></use>
+                            </svg> Segurança</span>
+                        <span><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-bolt"></use>
+                            </svg> Agilidade</span>
+                    </div>
+                </div>
+                <div class="footer-col">
+                    <h4>Links Rápidos</h4>
+                    <ul>
+                        <li><a href="index.html#home"><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-chevron-right"></use>
+                            </svg> Início</a></li>
+                        <li><a href="index.html#about"><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-chevron-right"></use>
+                            </svg> Sobre Nós</a></li>
+                        <li><a href="index.html#services"><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-chevron-right"></use>
+                            </svg> Serviços</a></li>
+                        <li><a href="index.html#products"><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-chevron-right"></use>
+                            </svg> Produtos</a></li>
+                        <li><a href="noticias.html"><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-chevron-right"></use>
+                            </svg> Notícias</a></li>
+                        <li><a href="publicidade.html"><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-chevron-right"></use>
+                            </svg> Publicidade</a></li>
+                        <li><a href="index.html#contact"><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-chevron-right"></use>
+                            </svg> Contato</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Contato</h4>
+                    <ul>
+                        <li><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-pin"></use>
+                            </svg> <span data-config="address">Mato Grosso, Brasil</span></li>
+                        <li><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-phone"></use>
+                            </svg> <a href="tel:+5566992281757" data-config="phone">(66) 99228-1757</a></li>
+                        <li><svg class="ic" aria-hidden="true" focusable="false">
+                                <use href="#ic-envelope"></use>
+                            </svg> <a href="mailto:contato@qgraos.com.br" data-config="email">contato@qgraos.com.br</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; <span data-config="year">2026</span> Q GRÃOS. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts: somente código local. Nenhuma dependência externa para o site funcionar.
+         O "?v=" evita que o navegador use uma versão antiga em cache. -->
+    <script src="site.config.js?v=1" defer></script>
+    <script src="supabase-api.js?v=1" defer></script>
+    <script src="script.js?v=10" defer></script>
+    <script src="noticia.js?v=2" defer></script>
+</body>
+
+</html>

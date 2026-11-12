@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS public.noticias (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     titulo text NOT NULL,
     resumo text,
+    conteudo text,
     categoria text NOT NULL DEFAULT 'Geral',
     fonte text,
     url text,
@@ -100,6 +101,7 @@ CREATE TABLE IF NOT EXISTS public.noticias (
     criado_em timestamptz NOT NULL DEFAULT now(),
     atualizado_em timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT noticias_titulo_check CHECK (char_length(titulo) BETWEEN 3 AND 220),
+    CONSTRAINT noticias_resumo_tamanho_check CHECK (resumo IS NULL OR char_length(resumo) <= 320),
     CONSTRAINT noticias_categoria_check CHECK (
         categoria IN ('Soja', 'Milho', 'Sorgo', 'Milheto', 'Feijao', 'Gergelim',
                       'Safra', 'Logistica', 'Mercado', 'Exportacao', 'Geral')

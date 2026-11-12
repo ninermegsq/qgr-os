@@ -28,6 +28,19 @@
         clique_noticia: 'Clique na notícia'
     };
 
+    const ROTULO_FORMATO = {
+        faixa: 'Faixa (banner)',
+        card: 'Card patrocinado'
+    };
+
+    const ROTULO_POSICAO = {
+        noticias: 'Lista de notícias',
+        noticia: 'Fim da matéria'
+    };
+
+    /* Limite do resumo: o banco recusa textos maiores (CHECK de 320) */
+    const LIMITE_RESUMO = 320;
+
     const ROTULO_CATEGORIA = {
         Geral: 'Geral',
         Soja: 'Soja',
@@ -122,6 +135,7 @@
     const estado = {
         leads: [],
         noticias: [],
+        anuncios: [],
         filtroLeads: ''
     };
 
@@ -245,6 +259,7 @@
         if (nome === 'noticias') carregarNoticias();
         if (nome === 'leads') carregarLeads();
         if (nome === 'visitas') carregarVisitas();
+        if (nome === 'anuncios') carregarAnuncios();
         if (nome === 'resumo') carregarResumo();
     }
 
@@ -319,7 +334,7 @@
         try {
             const linhas = await api.select(
                 'noticias',
-                'select=id,titulo,resumo,categoria,fonte,url,imagem_url,publicado,destaque,cliques,publicado_em&order=publicado_em.desc,criado_em.desc&limit=200'
+                'select=id,titulo,resumo,conteudo,categoria,fonte,url,imagem_url,publicado,destaque,cliques,visualizacoes,publicado_em&order=publicado_em.desc,criado_em.desc&limit=200'
             );
 
             estado.noticias = linhas || [];
@@ -351,13 +366,18 @@
                 corpo.appendChild(criar('tr', {}, [
                     criar('td', { classe: 'wrap' }, [
                         criar('strong', { texto: noticia.titulo }),
-                        noticia.fonte ? criar('div', { texto: noticia.fonte, style: 'color:#6B6B6B;font-size:0.82rem' }) : null
+                        noticia.fonte ? criar('div', { texto: noticia.fonte, style: 'color:#6B6B6B;font-size:0.82rem' }) : null,
+                        criar('div', {
+                            texto: noticia.conteudo ? 'Texto completo publicado' : 'Sem texto completo (só resumo)',
+                            style: 'color:#6B6B6B;font-size:0.82rem'
+                        })
                     ]),
                     criar('td', {}, [criar('span', {
                         classe: 'pill',
                         texto: ROTULO_CATEGORIA[noticia.categoria] || noticia.categoria
                     })]),
                     criar('td', { texto: formatarData(noticia.publicado_em) }),
+                    criar('td', { texto: String(noticia.visualizacoes || 0) }),
                     criar('td', { texto: String(noticia.cliques || 0) }),
                     criar('td', {}, [acaoEditar, espaco(), acaoExcluir])
                 ]));
@@ -365,7 +385,7 @@
         } catch (erro) {
             limpar(corpo);
             corpo.appendChild(criar('tr', {}, [
-                criar('td', { colSpan: '5', texto: 'Erro ao carregar: ' + mensagemDeErro(erro) })
+                criar('td', { colSpan: '6', texto: 'Erro ao carregar: ' + mensagemDeErro(erro) })
             ]));
         }
     }
@@ -374,6 +394,7 @@
         byId('newsId').value = noticia.id;
         byId('newsTitle').value = noticia.titulo || '';
         byId('newsSummary').value = noticia.resumo || '';
+        byId('newsContent').value = noticia.conteudo || '';
         byId('newsCategory').value = noticia.categoria || 'Geral';
         byId('newsSource').value = noticia.fonte || '';
         byId('newsUrl').value = noticia.url || '';
@@ -385,6 +406,7 @@
         byId('newsSubmit').textContent = 'Salvar alterações';
         byId('newsResetButton').hidden = false;
         mostrarAlerta(byId('newsAlert'), '');
+        atualizarContadorResumo();
 
         byId('newsTitle').focus();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -398,6 +420,29 @@
         byId('newsSubmit').textContent = 'Publicar notícia';
         byId('newsResetButton').hidden = true;
         mostrarAlerta(byId('newsAlert'), '');
+        atualizarContadorResumo();
+    }
+
+    /* ---------- Contador do resumo ---------- */
+
+    function atualizarContadorResumo() {
+        const campo = byId('newsSummary');
+        const contador = byId('newsSummaryCount');
+
+        if (!campo || !contador) return;
+
+        const tamanho = campo.value.trim().length;
+
+        contador.textContent = tamanho + ' de ' + LIMITE_RESUMO + ' caracteres';
+        contador.className = 'field-hint';
+
+        if (tamanho > LIMITE_RESUMO) {
+            contador.className = 'field-hint erro';
+            contador.textContent = tamanho + ' de ' + LIMITE_RESUMO +
+                ' caracteres: passou do limite do card. Encurte antes de publicar.';
+        } else if (tamanho > LIMITE_RESUMO - 40) {
+            contador.className = 'field-hint aviso';
+        }
     }
 
     async function salvarNoticia(evento) {
@@ -414,6 +459,7 @@
         const dados = {
             titulo: byId('newsTitle').value.trim(),
             resumo: byId('newsSummary').value.trim(),
+            conteudo: byId('newsContent').value.trim(),
             categoria: byId('newsCategory').value,
             fonte: byId('newsSource').value.trim(),
             url: byId('newsUrl').value.trim(),
@@ -424,6 +470,14 @@
 
         if (dados.titulo.length < 3) {
             mostrarAlerta(alerta, 'O título precisa de pelo menos 3 caracteres.');
+            botao.disabled = false;
+            return;
+        }
+
+        if (dados.resumo.length > LIMITE_RESUMO) {
+            mostrarAlerta(alerta,
+                'O resumo tem ' + dados.resumo.length + ' caracteres. O card aceita até ' +
+                LIMITE_RESUMO + '.');
             botao.disabled = false;
             return;
         }
@@ -456,6 +510,358 @@
             await api.remove('noticias', 'id=eq.' + encodeURIComponent(noticia.id));
             await carregarNoticias();
             await carregarResumo();
+        } catch (erro) {
+            window.alert('Erro ao excluir: ' + mensagemDeErro(erro));
+        }
+    }
+
+    /* ---------- Anúncios ---------- */
+
+    /* Número do formulário: vazio vira null (sem cota) */
+    function numeroOuNulo(valor) {
+        const texto = String(valor === null || valor === undefined ? '' : valor).trim();
+        if (!texto) return null;
+
+        const numero = Number(texto);
+        if (isNaN(numero) || numero < 0) return null;
+
+        return Math.floor(numero);
+    }
+
+    function dataParaCampo(iso) {
+        if (!iso) return '';
+
+        const data = new Date(iso);
+        if (isNaN(data.getTime())) return '';
+
+        const dia = String(data.getDate()).padStart(2, '0');
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const ano = data.getFullYear();
+
+        return ano + '-' + mes + '-' + dia;
+    }
+
+    function inicioParaIso(valor) {
+        if (!valor) return null;
+
+        const data = new Date(valor + 'T00:00:00');
+        if (isNaN(data.getTime())) return null;
+
+        return data.toISOString();
+    }
+
+    function fimParaIso(valor) {
+        if (!valor) return null;
+
+        const data = new Date(valor + 'T23:59:59');
+        if (isNaN(data.getTime())) return null;
+
+        return data.toISOString();
+    }
+
+    function anuncioNoPrazo(anuncio) {
+        const agora = Date.now();
+        const inicio = anuncio.inicio_em ? new Date(anuncio.inicio_em).getTime() : null;
+        const fim = anuncio.fim_em ? new Date(anuncio.fim_em).getTime() : null;
+
+        if (inicio !== null && agora < inicio) return false;
+        if (fim !== null && agora > fim) return false;
+
+        return true;
+    }
+
+    async function carregarAnuncios() {
+        const corpo = byId('adTableBody');
+        const vazio = byId('adEmpty');
+
+        /* A visao de desempenho traz as impressões de hoje e a cota
+           restante. As consultas abaixo sao reservas: se o banco ainda
+           nao tiver a visao (ou as colunas novas), o painel continua
+           funcionando com o que existe. */
+        const tentativas = [
+            ['vw_anuncios_desempenho',
+                'select=id,titulo,empresa,texto,url,imagem_url,posicao,formato,publicado,prioridade,peso,' +
+                'impressoes,impressoes_hoje,cliques,autorizacao,inicio_em,fim_em,limite_impressoes,' +
+                'limite_impressoes_dia,cota_esgotada,criado_em&order=prioridade.desc,criado_em.desc&limit=200'],
+            ['anuncios',
+                'select=id,titulo,empresa,texto,url,imagem_url,posicao,formato,publicado,prioridade,peso,' +
+                'impressoes,cliques,autorizacao,inicio_em,fim_em,limite_impressoes,limite_impressoes_dia,' +
+                'criado_em&order=prioridade.desc,criado_em.desc&limit=200'],
+            ['anuncios',
+                'select=id,titulo,empresa,texto,url,imagem_url,posicao,formato,publicado,prioridade,' +
+                'impressoes,cliques,autorizacao,inicio_em,fim_em,criado_em&order=prioridade.desc,criado_em.desc&limit=200']
+        ];
+
+        let linhas = null;
+        let ultimoErro = null;
+
+        for (const tentativa of tentativas) {
+            try {
+                const resultado = await api.select(tentativa[0], tentativa[1]);
+                linhas = resultado || [];
+                break;
+            } catch (erro) {
+                ultimoErro = erro;
+            }
+        }
+
+        if (linhas === null) {
+            limpar(corpo);
+            estado.anuncios = [];
+            vazio.hidden = true;
+            corpo.appendChild(criar('tr', {}, [
+                criar('td', { colSpan: '10', texto: 'Erro ao carregar: ' + mensagemDeErro(ultimoErro) })
+            ]));
+            return;
+        }
+
+        estado.anuncios = linhas.map(anuncio => Object.assign({}, anuncio, {
+            impressoes_hoje: Number(anuncio.impressoes_hoje || 0),
+            cota_esgotada: anuncio.cota_esgotada === true
+        }));
+
+        desenharAnuncios();
+    }
+
+    /* Texto "12 / 50": contador e cota (ou só o contador, se não há cota) */
+    function textoContador(valor, cota) {
+        if (cota === null || cota === undefined) return String(valor);
+        return String(valor) + ' / ' + String(cota);
+    }
+
+    /* A cota acabou? (total e diária) */
+    function cotaEsgotada(anuncio) {
+        const impressoes = Number(anuncio.impressoes || 0);
+        const hoje = Number(anuncio.impressoes_hoje || 0);
+
+        const total = anuncio.limite_impressoes;
+        const dia = anuncio.limite_impressoes_dia;
+
+        if (total !== null && total !== undefined && impressoes >= Number(total)) return true;
+        if (dia !== null && dia !== undefined && hoje >= Number(dia)) return true;
+
+        return false;
+    }
+
+    function desenharAnuncios() {
+        const corpo = byId('adTableBody');
+        const vazio = byId('adEmpty');
+
+        limpar(corpo);
+        vazio.hidden = estado.anuncios.length > 0;
+
+        estado.anuncios.forEach(anuncio => {
+            const impressoes = Number(anuncio.impressoes || 0);
+            const cliques = Number(anuncio.cliques || 0);
+            const hoje = Number(anuncio.impressoes_hoje || 0);
+            const ctr = impressoes > 0 ? (cliques / impressoes * 100).toFixed(1) + '%' : '—';
+
+            const noPrazo = anuncioNoPrazo(anuncio);
+            const semCota = anuncio.cota_esgotada === true || cotaEsgotada(anuncio);
+
+            const status = anuncio.publicado === true
+                ? (noPrazo ? (semCota ? 'esgotado' : 'publicado') : 'pausado')
+                : 'rascunho';
+
+            const rotuloStatus = {
+                publicado: 'No ar',
+                pausado: 'Fora do prazo',
+                esgotado: 'Cota esgotada',
+                rascunho: 'Rascunho'
+            }[status];
+
+            const acaoEditar = criar('button', {
+                type: 'button',
+                classe: 'btn ghost small',
+                texto: 'Editar',
+                'aria-label': 'Editar anúncio de ' + (anuncio.empresa || '')
+            });
+            acaoEditar.addEventListener('click', () => preencherFormularioAnuncio(anuncio));
+
+            const acaoPublicar = criar('button', {
+                type: 'button',
+                classe: 'btn ghost small',
+                texto: anuncio.publicado === true ? 'Pausar' : 'Publicar'
+            });
+            acaoPublicar.addEventListener('click', () => alternarPublicacaoAnuncio(anuncio));
+
+            const acaoExcluir = criar('button', {
+                type: 'button',
+                classe: 'btn danger',
+                texto: 'Excluir'
+            });
+            acaoExcluir.addEventListener('click', () => excluirAnuncio(anuncio));
+
+            corpo.appendChild(criar('tr', {}, [
+                criar('td', { classe: 'wrap' }, [
+                    criar('strong', { texto: anuncio.empresa || '—' }),
+                    criar('div', { texto: anuncio.titulo || '', style: 'color:#6B6B6B;font-size:0.82rem' }),
+                    anuncio.autorizacao
+                        ? criar('div', { texto: 'Autorizado por: ' + anuncio.autorizacao, style: 'color:#6B6B6B;font-size:0.78rem' })
+                        : null
+                ]),
+                criar('td', { texto: ROTULO_FORMATO[anuncio.formato] || anuncio.formato || '—' }),
+                criar('td', { texto: ROTULO_POSICAO[anuncio.posicao] || anuncio.posicao || '—' }),
+                criar('td', { texto: String(Number(anuncio.peso || 1)) }),
+                criar('td', { texto: textoContador(impressoes, anuncio.limite_impressoes) }),
+                criar('td', { texto: textoContador(hoje, anuncio.limite_impressoes_dia) }),
+                criar('td', { texto: String(cliques) }),
+                criar('td', { texto: ctr }),
+                criar('td', {}, [criar('span', { classe: 'pill ' + status, texto: rotuloStatus })]),
+                criar('td', {}, [acaoEditar, espaco(), acaoPublicar, espaco(), acaoExcluir])
+            ]));
+        });
+    }
+
+    function preencherFormularioAnuncio(anuncio) {
+        byId('adId').value = anuncio.id;
+        byId('adCompany').value = anuncio.empresa || '';
+        byId('adTitle').value = anuncio.titulo || '';
+        byId('adText').value = anuncio.texto || '';
+        byId('adUrl').value = anuncio.url || '';
+        byId('adImage').value = anuncio.imagem_url || '';
+        byId('adPosition').value = anuncio.posicao || 'noticias';
+        byId('adFormat').value = anuncio.formato || 'faixa';
+        byId('adAuth').value = anuncio.autorizacao || '';
+        byId('adStart').value = dataParaCampo(anuncio.inicio_em);
+        byId('adEnd').value = dataParaCampo(anuncio.fim_em);
+        byId('adPriority').value = String(anuncio.prioridade || 0);
+        byId('adPeso').value = String(Number(anuncio.peso || 1));
+        byId('adLimiteTotal').value = anuncio.limite_impressoes === null || anuncio.limite_impressoes === undefined
+            ? '' : String(anuncio.limite_impressoes);
+        byId('adLimiteDia').value = anuncio.limite_impressoes_dia === null || anuncio.limite_impressoes_dia === undefined
+            ? '' : String(anuncio.limite_impressoes_dia);
+        byId('adPublished').checked = anuncio.publicado === true;
+
+        byId('adFormTitle').textContent = 'Editar anúncio';
+        byId('adSubmit').textContent = 'Salvar alterações';
+        byId('adResetButton').hidden = false;
+        mostrarAlerta(byId('adAlert'), '');
+
+        byId('adCompany').focus();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function limparFormularioAnuncio() {
+        byId('adForm').reset();
+        byId('adId').value = '';
+        byId('adPublished').checked = true;
+        byId('adPriority').value = '0';
+        byId('adPeso').value = '1';
+        byId('adLimiteTotal').value = '';
+        byId('adLimiteDia').value = '';
+        byId('adPosition').value = 'noticias';
+        byId('adFormat').value = 'faixa';
+        byId('adFormTitle').textContent = 'Publicar anúncio';
+        byId('adSubmit').textContent = 'Publicar anúncio';
+        byId('adResetButton').hidden = true;
+        mostrarAlerta(byId('adAlert'), '');
+    }
+
+    async function salvarAnuncio(evento) {
+        evento.preventDefault();
+
+        const alerta = byId('adAlert');
+        const botao = byId('adSubmit');
+
+        mostrarAlerta(alerta, '');
+        botao.disabled = true;
+
+        const id = byId('adId').value.trim();
+
+        const dados = {
+            empresa: byId('adCompany').value.trim(),
+            titulo: byId('adTitle').value.trim(),
+            texto: byId('adText').value.trim(),
+            url: byId('adUrl').value.trim(),
+            imagem_url: byId('adImage').value.trim(),
+            posicao: byId('adPosition').value,
+            formato: byId('adFormat').value,
+            autorizacao: byId('adAuth').value.trim(),
+            inicio_em: inicioParaIso(byId('adStart').value),
+            fim_em: fimParaIso(byId('adEnd').value),
+            publicado: byId('adPublished').checked,
+            prioridade: Number(byId('adPriority').value || 0),
+            peso: Math.min(10, Math.max(1, Number(byId('adPeso').value || 1))),
+            limite_impressoes: numeroOuNulo(byId('adLimiteTotal').value),
+            limite_impressoes_dia: numeroOuNulo(byId('adLimiteDia').value)
+        };
+
+        if (dados.empresa.length < 2) {
+            mostrarAlerta(alerta, 'Informe a empresa anunciante.');
+            botao.disabled = false;
+            return;
+        }
+
+        if (dados.titulo.length < 3) {
+            mostrarAlerta(alerta, 'O título do anúncio precisa de pelo menos 3 caracteres.');
+            botao.disabled = false;
+            return;
+        }
+
+        /* Prova de autorização do anunciante (Lei 9.279/1996, art. 37) */
+        if (!dados.autorizacao) {
+            mostrarAlerta(alerta,
+                'Informe quem autorizou a publicação (nome e contato). Sem isso o anúncio não pode ir ao ar.',
+                'warning');
+            botao.disabled = false;
+            return;
+        }
+
+        /* Cota zerada deixaria o anúncio fora da fila para sempre */
+        if (dados.limite_impressoes !== null && dados.limite_impressoes < 1) {
+            mostrarAlerta(alerta,
+                'A cota total precisa ser 1 ou mais. Deixe em branco para deixar ilimitado.',
+                'warning');
+            botao.disabled = false;
+            return;
+        }
+
+        if (dados.limite_impressoes_dia !== null && dados.limite_impressoes_dia < 1) {
+            mostrarAlerta(alerta,
+                'A cota por dia precisa ser 1 ou mais. Deixe em branco para deixar ilimitado.',
+                'warning');
+            botao.disabled = false;
+            return;
+        }
+
+        try {
+            if (id) {
+                await api.update('anuncios', 'id=eq.' + encodeURIComponent(id), dados);
+                mostrarAlerta(alerta, 'Anúncio atualizado.', 'ok');
+            } else {
+                await api.insert('anuncios', dados);
+                mostrarAlerta(alerta, 'Anúncio publicado.', 'ok');
+            }
+
+            limparFormularioAnuncio();
+            await carregarAnuncios();
+        } catch (erro) {
+            mostrarAlerta(alerta, 'Erro ao salvar: ' + mensagemDeErro(erro));
+        } finally {
+            botao.disabled = false;
+        }
+    }
+
+    async function alternarPublicacaoAnuncio(anuncio) {
+        try {
+            await api.update('anuncios', 'id=eq.' + encodeURIComponent(anuncio.id), {
+                publicado: anuncio.publicado !== true
+            });
+            await carregarAnuncios();
+        } catch (erro) {
+            window.alert('Erro ao mudar o status: ' + mensagemDeErro(erro));
+        }
+    }
+
+    async function excluirAnuncio(anuncio) {
+        if (!window.confirm('Excluir o anúncio de "' + (anuncio.empresa || '') + '"? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+
+        try {
+            await api.remove('anuncios', 'id=eq.' + encodeURIComponent(anuncio.id));
+            await carregarAnuncios();
         } catch (erro) {
             window.alert('Erro ao excluir: ' + mensagemDeErro(erro));
         }
@@ -699,6 +1105,9 @@
         byId('logoutButton').addEventListener('click', sair);
         byId('newsForm').addEventListener('submit', salvarNoticia);
         byId('newsResetButton').addEventListener('click', limparFormularioNoticia);
+        byId('newsSummary').addEventListener('input', atualizarContadorResumo);
+        byId('adForm').addEventListener('submit', salvarAnuncio);
+        byId('adResetButton').addEventListener('click', limparFormularioAnuncio);
         byId('leadExport').addEventListener('click', exportarLeadsCsv);
 
         byId('leadSearch').addEventListener('input', evento => {
@@ -714,6 +1123,7 @@
     async function iniciar() {
         registrarEventos();
         verificarConfiguracao();
+        atualizarContadorResumo();
 
         if (!api) {
             mostrarLogin();

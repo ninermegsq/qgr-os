@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "serve": "node server.js",
-    "check": "node --check script.js && node --check site.config.js && node --check supabase-api.js && node --check admin/admin.js && node --check server.js && node tools/verify.js && node tools/test-config.js",
+    "check": "node --check script.js && node --check noticia.js && node --check site.config.js && node --check supabase-api.js && node --check admin/admin.js && node --check server.js && node tools/verify.js && node tools/test-config.js",
     "check:all": "npm run check && npm run test:server && npm run visual",
     "verify": "node tools/verify.js",
     "sitemap": "node tools/build-sitemap.js",

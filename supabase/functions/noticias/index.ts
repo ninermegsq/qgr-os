@@ -9,6 +9,8 @@
 //
 // Uso:
 //   GET /functions/v1/noticias?limite=6&categoria=Soja
+//   GET /functions/v1/noticias?categoria=Soja,Milho&limite=9
+//   GET /functions/v1/noticias?id=<uuid>&completa=1   (materia completa)
 //
 // Resposta:
 //   { "noticias": [ ... ], "total": 3, "gerado_em": "2026-01-01T00:00:00Z" }
@@ -75,8 +77,18 @@ serve(async (request: Request) => {
     : 6;
 
   const categoriaParam = url.searchParams.get("categoria");
-  const categoria =
-    categoriaParam && CATEGORIAS.includes(categoriaParam) ? categoriaParam : null;
+  // Aceita uma ou varias categorias: "Soja" ou "Soja,Milho".
+  const categorias = categoriaParam
+    ? categoriaParam
+        .split(",")
+        .map((valor) => valor.trim())
+        .filter((valor) => CATEGORIAS.includes(valor))
+        .filter((valor, indice, lista) => lista.indexOf(valor) === indice)
+    : [];
+
+  // "completa=1" devolve tambem o texto integral da materia (noticia.html).
+  const completaParam = url.searchParams.get("completa");
+  const incluirConteudo = completaParam === "1" || completaParam === "true";
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -103,16 +115,25 @@ serve(async (request: Request) => {
     "publicado_em",
     "destaque",
     "cliques",
-  ].join(",");
+  ];
+
+  if (incluirConteudo) campos.push("conteudo");
 
   const filtros = [
     "publicado=eq.true",
-    `select=${campos}`,
+    `select=${campos.join(",")}`,
     "order=destaque.desc,publicado_em.desc",
     `limit=${limite}`,
   ];
 
-  if (categoria) filtros.push(`categoria=eq.${encodeURIComponent(categoria)}`);
+  if (categorias.length === 1) {
+    filtros.push(`categoria=eq.${encodeURIComponent(categorias[0])}`);
+  } else if (categorias.length > 1) {
+    const alternativas = categorias
+      .map((valor) => `categoria.eq.${encodeURIComponent(valor)}`)
+      .join(",");
+    filtros.push(`or=(${alternativas})`);
+  }
 
   const resposta = await fetch(
     `${supabaseUrl}/rest/v1/noticias?${filtros.join("&")}`,
@@ -145,6 +166,7 @@ serve(async (request: Request) => {
     publicado_em: linha.publicado_em ?? null,
     destaque: Boolean(linha.destaque),
     cliques: Number(linha.cliques ?? 0),
+    conteudo: incluirConteudo ? texto(linha.conteudo) : "",
   }));
 
   return json(

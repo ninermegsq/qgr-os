@@ -62,6 +62,7 @@
             <button type="button" class="tab" data-tab="noticias" role="tab" aria-selected="false">Notícias</button>
             <button type="button" class="tab" data-tab="leads" role="tab" aria-selected="false">Leads</button>
             <button type="button" class="tab" data-tab="visitas" role="tab" aria-selected="false">Visitas</button>
+            <button type="button" class="tab" data-tab="anuncios" role="tab" aria-selected="false">Anúncios</button>
         </nav>
 
         <main class="content">
@@ -98,9 +99,20 @@
                         </div>
 
                         <div class="field">
-                            <label for="newsSummary">Resumo</label>
+                            <label for="newsSummary">Resumo (aparece no card)</label>
                             <textarea id="newsSummary" name="resumo" rows="3"
                                 placeholder="Resumo curto da notícia (aparece no card do site)"></textarea>
+                            <p class="field-hint" id="newsSummaryCount">0 de 320 caracteres</p>
+                        </div>
+
+                        <div class="field">
+                            <label for="newsContent">Texto da notícia (completo)</label>
+                            <textarea id="newsContent" name="conteudo" rows="14"
+                                placeholder="Cole aqui a matéria completa. O texto é publicado dentro do site: o visitante nunca é levado para a página de origem.&#10;&#10;Uma linha em branco separa os parágrafos. Comece uma linha com '## ' para criar um subtítulo."></textarea>
+                            <p class="field-hint">
+                                É este texto que aparece na página da matéria (noticia.html). Sem ele, a notícia
+                                mostra só o resumo e o crédito da fonte.
+                            </p>
                         </div>
 
                         <div class="grid-2">
@@ -128,8 +140,11 @@
                         </div>
 
                         <div class="field">
-                            <label for="newsUrl">Link da notícia</label>
+                            <label for="newsUrl">Link da notícia (fonte)</label>
                             <input type="url" id="newsUrl" name="url" placeholder="https://...">
+                            <p class="field-hint">
+                                Fica apenas como crédito no final do texto. O visitante não é levado para fora.
+                            </p>
                         </div>
 
                         <div class="field">
@@ -166,6 +181,7 @@
                                     <th>Título</th>
                                     <th>Categoria</th>
                                     <th>Publicação</th>
+                                    <th>Visualizações</th>
                                     <th>Cliques</th>
                                     <th>Ações</th>
                                 </tr>
@@ -247,12 +263,191 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ---------- ANÚNCIOS ---------- -->
+            <section class="tab-panel" id="tab-anuncios" role="tabpanel" hidden>
+                <div class="panel-box">
+                    <h2>Como os anúncios são exibidos</h2>
+                    <ul class="rotacao-explica">
+                        <li><strong>Rodízio real:</strong> os anúncios elegíveis entram numa fila e se revezam. Nenhum anunciante fica com o espaço todo.</li>
+                        <li><strong>Peso no rodízio:</strong> define a participação. Peso 3 = três vezes mais espaço que um peso 1 (mesmo peso = mesmo espaço).</li>
+                        <li><strong>Prioridade:</strong> só a ordem dentro do ciclo (desempate do peso). O anúncio de maior prioridade aparece primeiro no ciclo, mas não trava o espaço.</li>
+                        <li><strong>Prazo e cotas:</strong> o banco só entrega anúncio publicado, dentro do prazo e com cota disponível. Pausou ou esgotou a cota, ele sai da fila na hora.</li>
+                        <li><strong>Distribuição:</strong> cada visitante começa num ponto diferente do ciclo (definido pelo visitante e pelo dia), então o primeiro anúncio da página já é distribuído entre os anunciantes.</li>
+                        <li><strong>Contagem:</strong> a impressão só é contada quando o bloco aparece na tela (metade visível). O clique é contado no link "Saiba mais".</li>
+                    </ul>
+                    <p class="rotacao-nota">
+                        Os números de hoje e a cota restante ficam na tabela abaixo. O painel mostra também
+                        o que está fora do prazo e o que esgotou a cota — nenhum dos dois aparece no site.
+                    </p>
+                </div>
+
+                <div class="panel-box">
+                    <div class="panel-head">
+                        <h2 id="adFormTitle">Publicar anúncio</h2>
+                        <button type="button" class="btn ghost small" id="adResetButton" hidden>Cancelar edição</button>
+                    </div>
+
+                    <form class="news-form" id="adForm">
+                        <input type="hidden" id="adId" name="id">
+
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="adCompany">Empresa anunciante</label>
+                                <input type="text" id="adCompany" name="empresa" maxlength="120" required>
+                            </div>
+
+                            <div class="field">
+                                <label for="adTitle">Título do anúncio</label>
+                                <input type="text" id="adTitle" name="titulo" maxlength="160" required>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="adText">Frase (aparece no anúncio)</label>
+                            <textarea id="adText" name="texto" rows="2" maxlength="240"
+                                placeholder="Ex.: Frete para Mato Grosso com seguro da carga"></textarea>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="adUrl">Site do anunciante</label>
+                                <input type="url" id="adUrl" name="url" placeholder="https://...">
+                                <p class="field-hint">
+                                    O link abre com a marcação sponsored nofollow noopener e nunca no cabeçalho do site.
+                                </p>
+                            </div>
+
+                            <div class="field">
+                                <label for="adImage">URL da imagem (logo)</label>
+                                <input type="url" id="adImage" name="imagem_url" placeholder="https://... (opcional)">
+                            </div>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="adPosition">Onde o anúncio aparece</label>
+                                <select id="adPosition" name="posicao">
+                                    <option value="noticias">Página de notícias (lista)</option>
+                                    <option value="noticia">Fim da matéria (noticia.html)</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label for="adFormat">Formato</label>
+                                <select id="adFormat" name="formato">
+                                    <option value="faixa">Faixa (banner com botão)</option>
+                                    <option value="card">Card patrocinado (com selo)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="adAuth">Autorizado por (contato)</label>
+                            <input type="text" id="adAuth" name="autorizacao" maxlength="160"
+                                placeholder="Ex.: Maria Souza - maria@empresa.com.br">
+                            <p class="field-hint">
+                                Obrigatório. Ficamos com esta prova de autorização do anunciante
+                                (Lei 9.279/1996, art. 37).
+                            </p>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="adStart">Início da veiculação</label>
+                                <input type="date" id="adStart" name="inicio_em">
+                            </div>
+
+                            <div class="field">
+                                <label for="adEnd">Fim da veiculação</label>
+                                <input type="date" id="adEnd" name="fim_em">
+                            </div>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="field inline">
+                                <label class="check">
+                                    <input type="checkbox" id="adPublished" name="publicado" checked>
+                                    <span>Publicar anúncio</span>
+                                </label>
+                            </div>
+
+                            <div class="field">
+                                <label for="adPriority">Prioridade (ordem no ciclo)</label>
+                                <input type="number" id="adPriority" name="prioridade" min="0" max="999" step="1" value="0">
+                                <p class="field-hint">
+                                    Só a ordem dentro do ciclo do rodízio. Não prende o anúncio no topo:
+                                    todos os anúncios elegíveis são exibidos.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="adPeso">Peso no rodízio</label>
+                                <input type="number" id="adPeso" name="peso" min="1" max="10" step="1" value="1">
+                                <p class="field-hint">
+                                    Participação no rodízio: peso 3 = três vezes mais espaço que um peso 1.
+                                </p>
+                            </div>
+
+                            <div class="field">
+                                <label for="adLimiteTotal">Cota total de impressões</label>
+                                <input type="number" id="adLimiteTotal" name="limite_impressoes" min="0" step="1"
+                                    placeholder="Sem limite">
+                                <p class="field-hint">
+                                    Em branco = ilimitado. Quando acaba, o anúncio sai da fila sozinho.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="adLimiteDia">Cota de impressões por dia</label>
+                            <input type="number" id="adLimiteDia" name="limite_impressoes_dia" min="0" step="1"
+                                placeholder="Sem limite">
+                            <p class="field-hint">
+                                Contagem real de hoje (o painel mostra). Em branco = ilimitado.
+                            </p>
+                        </div>
+
+                        <p class="alert" id="adAlert" role="alert" hidden></p>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn primary" id="adSubmit">Publicar anúncio</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="panel-box">
+                    <h2>Anúncios cadastrados</h2>
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Anunciante</th>
+                                    <th>Formato</th>
+                                    <th>Posição</th>
+                                    <th>Peso</th>
+                                    <th>Impressões</th>
+                                    <th>Hoje</th>
+                                    <th>Cliques</th>
+                                    <th>CTR</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adTableBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="empty" id="adEmpty" hidden>Nenhum anúncio cadastrado.</p>
+                </div>
+            </section>
         </main>
     </div>
 
     <script src="../site.config.js?v=1"></script>
     <script src="../supabase-api.js?v=1"></script>
-    <script src="admin.js?v=1"></script>
+    <script src="admin.js?v=2"></script>
 </body>
 
 </html>

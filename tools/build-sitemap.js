@@ -31,10 +31,14 @@ const siteUrl = String(config.siteUrl || 'https://qgraos.com.br/').replace(/\/*$
 const today = new Date().toISOString().slice(0, 10);
 
 /* Paginas publicas do site. A pagina de noticias entra separada:
-   ela tem conteudo proprio e muda toda vez que ha publicacao nova. */
+   ela tem conteudo proprio e muda toda vez que ha publicacao nova.
+   A pagina de cada materia (noticia.html?id=...) NAO entra: o
+   endereco so existe com o id da noticia e o Google indexa pelo
+   canonical que o proprio site monta. */
 const PAGINAS = [
     { loc: siteUrl, changefreq: 'monthly', priority: '1.0' },
-    { loc: siteUrl + 'noticias.html', changefreq: 'daily', priority: '0.8' }
+    { loc: siteUrl + 'noticias.html', changefreq: 'daily', priority: '0.8' },
+    { loc: siteUrl + 'publicidade.html', changefreq: 'yearly', priority: '0.3' }
 ];
 
 const urls = PAGINAS.map(pagina => (

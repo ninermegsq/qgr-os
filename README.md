@@ -3,6 +3,9 @@
 Site estático (HTML + CSS + JavaScript puro) da **Q GRÃOS – Corretora de Grãos** (Mato Grosso, BR).
 Não usa framework, não usa CDN e não precisa de build: o site funciona **offline**, direto do disco.
 
+O **portal de notícias** (matéria hospedada no site, filtro por categoria e espaços
+patrocinados) está descrito em [O portal de notícias](#o-portal-de-notícias).
+
 ## Como abrir
 
 **Opção 1 — servidor local (recomendado, com Node.js instalado):**
@@ -65,6 +68,18 @@ Roda `node --check` no JavaScript e o verificador `tools/verify.js`, que confere
   botão "carregar mais"), **ausência do botão de WhatsApp na navegação** (`.nav-whatsapp` não
   pode voltar), cliente `supabase-api.js`, painel `/admin` com `noindex` e migration com RLS +
   RPC `SECURITY DEFINER`;
+- **portal de notícias**: a matéria hospedada em `noticia.html` (coluna `conteudo` no banco,
+  container `#noticiaCorpo`, estado de erro `#noticiaErro`, JSON-LD `NewsArticle`), os anúncios
+  com selo de "Publicidade", `rel="sponsored nofollow noopener"` e a política `publicidade.html`,
+  e o filtro de categoria com multi-seleção (`?categoria=Soja,Milho`);
+- **bloco de contato da matéria**: o bloco compacto `#leadMateria` ("O que você busca hoje?")
+  com o botão dourado para a ficha de contato (`index.html#contact`);
+- **métricas da matéria**: a coluna `visualizacoes` com a RPC `registrar_visualizacao_noticia`,
+  e a coerência entre a classe do card da manchete e o contador de clique;
+- **privacidade dos anúncios**: o site só pede as colunas públicas do anúncio — cotas, métricas
+  e o contato de autorização têm de ficar restritos ao painel (o `verify` falha se o
+  `script.js` pedir dado privado ou se as migrations deixarem de revogar o acesso do `anon`);
+- **imagens**: nenhuma tag `<img>` sem `src` (o navegador mostraria um quadro quebrado);
 - **nenhuma chave secreta** (`service_role` / `sb_secret_`) em nenhum arquivo do projeto;
 - `robots.txt` e `sitemap.xml` consistentes com a URL do site.
 
@@ -89,9 +104,13 @@ npm run test:supabase
 
 Ele confere, de ponta a ponta: o feed público responde; a chave anônima **não** consegue
 inserir lead nem ver nenhuma linha de `leads`/`visitas`; as funções `registrar_lead`,
-`registrar_evento` e `clicar_noticia` gravam; o antispam recusa envio repetido e o e-mail
-inválido é barrado; o login do administrador funciona; e o painel publica uma notícia,
-que aparece no feed público, e depois a apaga.
+`registrar_evento`, `clicar_noticia` e `registrar_visualizacao_noticia` gravam; o antispam
+recusa envio repetido e o e-mail inválido é barrado; os anúncios publicados são lidos pelo
+público e a chave anônima **não** consegue inserir um anúncio; a chave anônima **não** consegue
+ler as cotas do anúncio nem a view de desempenho (são dados do painel), mas o painel lê as duas
+coisas; o filtro com várias categorias (`or=(categoria.eq.Soja,categoria.eq.Milho)`) funciona;
+o login do administrador funciona; e o painel publica uma notícia e um anúncio, que aparecem no
+feed público, e depois os apaga.
 
 Para ele entrar no painel, informe a credencial por variável de ambiente
 (`QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD`) ou crie o arquivo `.qg-admin.json`
@@ -114,8 +133,8 @@ npm install     # instala o puppeteer-core (só isso; não baixa navegador)
 npm run visual
 ```
 
-O que ele verifica, em `/`, `/noticias.html`, `/404.html` e `/admin/`, nos tamanhos
-**1440×900**, **390×844** e **360×740**:
+O que ele verifica, em `/`, `/noticias.html`, `/noticia.html?id=…`, `/noticias.html?categoria=…`,
+`/publicidade.html`, `/404.html` e `/admin/`, nos tamanhos **1440×900**, **390×844** e **360×740**:
 
 - erros de console, exceções da página, requisições falhas e respostas HTTP ≥ 400;
 - rolagem horizontal (conteúdo mais largo que a tela) e elementos fora da viewport;
@@ -131,8 +150,17 @@ O que ele verifica, em `/`, `/noticias.html`, `/404.html` e `/admin/`, nos taman
 - envio do formulário gerando o link correto do WhatsApp (com o consentimento marcado);
 - a home **sem** grade de notícias (só o convite) e a página `/noticias.html` com a grade
   carregada e o botão "carregar mais"; a **ausência do botão de WhatsApp** na navegação;
+- **a matéria hospedada**: `/noticia.html?id=…` mostra o texto completo, o JSON-LD
+  `NewsArticle`, o crédito da fonte e o bloco "Mais notícias"; a página com filtro mostra os
+  chips marcados, a categoria na URL e o `canonical` da combinação;
+- **o card da manchete**: todo card renderizado (na listagem e no "Mais notícias") tem a classe
+  `news-card-link` e o `data-noticia-id` — é o que o contador de clique do site reconhece — e
+  aponta para a matéria interna (`noticia.html?id=…`), nunca para fora do site;
+- **os anúncios**: selo de "Publicidade" visível em todo bloco, aviso de corretora e link com
+  `sponsored nofollow noopener`, o formato pedido pelo anunciante (faixa ou card) e a regra de
+  não repetir o mesmo anúncio duas vezes na mesma tela;
 - **o painel `/admin`**: tela de login, `noindex`, login de verdade com a credencial local,
-  e as quatro abas (Resumo, Notícias, Leads, Visitas) carregando os dados sem erro.
+  e as cinco abas (Resumo, Notícias, Anúncios, Leads, Visitas) carregando os dados sem erro.
 
 O teste do painel apaga no final o lead e as visitas que ele mesmo criou, para não
 sujar o painel de quem usa o site.
@@ -166,15 +194,18 @@ npm run sitemap
 | Arquivo | Função |
 | --- | --- |
 | `index.html` | Página principal (sobre, serviços, produtos, contato) + sprite de ícones SVG inline + SEO (OG/JSON-LD) |
-| `noticias.html` | **Página exclusiva das notícias** do agronegócio (grade, "carregar mais" e SEO próprio) |
+| `noticias.html` | **Página exclusiva das notícias** do agronegócio (grade, filtro por categoria, "carregar mais" e SEO próprio) |
+| `noticia.html` | **Página da matéria**: o texto completo da notícia, hospedado no site (o visitante nunca é levado para fora), com SEO próprio (canonical, Open Graph, JSON-LD `NewsArticle`), crédito da fonte, **bloco compacto "O que você busca hoje?" com botão para a ficha de contato**, espaço patrocinado no fim e "Mais notícias" |
+| `noticia.js` | Carrega a matéria do banco e escreve na tela com `textContent` (nunca `innerHTML`), monta o SEO, conta a visualização, carrega o anúncio do fim e monta o link do botão de lead (escolha + contexto da matéria) |
+| `publicidade.html` | Política de transparência dos anúncios: o que é anúncio, o que a Q GRÃOS não endossa, autorização do anunciante, links `sponsored`, contadores e LGPD |
 | `404.html` | Página de erro com a identidade do site e links para as seções |
 | `style.css` | Estilos completos (tema verde/dourado, responsivo) |
-| `script.js` | Menu mobile, rolagem suave, animação ao rolar, partículas, tilt 3D, envio ao WhatsApp, aplicação do `site.config.js`, **notícias + leads + analytics** |
+| `script.js` | Menu mobile, rolagem suave, animação ao rolar, partículas, tilt 3D, envio ao WhatsApp, aplicação do `site.config.js`, **notícias + leads + analytics**, preenchimento automático da ficha a partir da matéria e URL de origem do lead |
 | `site.config.js` | **Fonte única dos dados**: telefone, e-mail, CNPJ, endereço, redes e chave do Supabase |
 | `supabase-api.js` | Cliente REST do Supabase (PostgREST + Auth) em `fetch` puro — sem SDK, sem CDN |
-| `admin/index.html` | Painel administrativo (login + abas Resumo/Notícias/Leads/Visitas) |
+| `admin/index.html` | Painel administrativo (login + abas Resumo/Notícias/Anúncios/Leads/Visitas) |
 | `admin/admin.css` | Estilos do painel |
-| `admin/admin.js` | Lógica do painel (login, CRUD de notícias, status de lead, CSV, gráficos) |
+| `admin/admin.js` | Lógica do painel (login, CRUD de notícias e de anúncios, status de lead, CSV, gráficos) |
 | `supabase/migrations/20260101000000_qg_init.sql` | Schema do banco: tabelas, RLS, RPC públicas e vistas do painel |
 | `supabase/functions/noticias/index.ts` | Edge Function `noticias` (feed público com cache) |
 | `supabase/config.toml` | Configuração do projeto Supabase (inclui `verify_jwt = false` da função) |
@@ -197,7 +228,9 @@ npm run sitemap
 | Página | Endereço | O que tem |
 | --- | --- | --- |
 | Home | `/` (`index.html`) | Hero, sobre, serviços, produtos, **convite para as notícias** e contato |
-| Notícias | `/noticias.html` | **A lista de notícias do agronegócio** (página própria, com SEO próprio) |
+| Notícias | `/noticias.html` | **A lista de notícias do agronegócio** (página própria, com SEO próprio), filtro de categoria e espaços patrocinados |
+| Matéria | `/noticia.html?id=…` | **A notícia inteira, hospedada no site**: texto completo, crédito da fonte, compartilhamento, **bloco "O que você busca hoje?" + botão para a ficha**, anúncio no fim e "Mais notícias" |
+| Publicidade | `/publicidade.html` | Política de transparência dos anúncios (como anunciar, o que a Q GRÃOS não endossa, LGPD) |
 | Erro 404 | `/404.html` | Página de erro com links para as seções e para as notícias |
 | Painel | `/admin/` | Área administrativa (bloqueada para buscadores) |
 
@@ -214,6 +247,72 @@ Regras que valem para todas as páginas:
 As notícias carregam do Supabase com paginação real (`limit`/`offset` na API REST):
 a página mostra 9 por vez e o botão **“Carregar mais notícias”** aparece só quando ainda
 há resultado — ao terminar, ele some sozinho.
+
+## O portal de notícias
+
+**1. A matéria fica hospedada aqui.** O card da listagem abre `noticia.html?id=…` e o texto
+completo vem do banco (coluna `noticias.conteudo`). O visitante **não** é levado para a
+página de origem: a fonte vira um crédito em texto no fim da matéria. No painel, o campo
+“Texto completo” é opcional — sem ele, a página avisa que o texto está sendo publicado.
+Para formatar: parágrafo separado por linha em branco, `## ` para subtítulo e `- ` para lista.
+
+**2. Filtro por categoria (várias de uma vez).** Os chips da página de notícias marcam Soja,
+Milho, Safra… e podem ser marcados **vários ao mesmo tempo** (`?categoria=Soja,Milho`). A
+escolha fica no endereço (para linkar e compartilhar), o canonical aponta para a combinação
+escolhida e uma combinação sem resultado recebe `noindex`.
+
+**3. Anúncios com regra (rodízio de verdade).** A aba “Anúncios” do painel publica espaços
+patrocinados em duas formas (faixa e card) e em duas posições (lista de notícias e fim da
+matéria). Todo anúncio precisa de **autorização do anunciante** (campo “Autorizado por”, Lei
+9.279/1996, art. 37) e aparece com selo de “Publicidade”, aviso de que a Q GRÃOS é corretora
+e recebe comissão, e link com `rel="sponsored nofollow noopener"`. A política completa está em
+`/publicidade.html`. Nenhum pixel ou script de terceiros: só os contadores internos
+(impressões, cliques e CTR). O anúncio **nunca** entra no cabeçalho do site.
+
+Como os espaços são distribuídos:
+
+- **Fila de rodízio** — o banco devolve só os anúncios *elegíveis* (publicados, dentro do prazo
+  e sem cota esgotada) e o site os reveza. Antes, o anúncio de maior “prioridade” levava 100%
+  das exibições e os outros, 0%.
+- **Peso no rodízio** — define a participação: peso 3 = três vezes mais espaço que peso 1.
+  Anúncios com o mesmo peso dividem o espaço por igual.
+- **Prioridade** — só a ordem dentro do ciclo (desempate do peso). O de maior prioridade aparece
+  primeiro no ciclo de cada visitante, mas **não** trava o espaço: todos os elegíveis são
+  exibidos.
+- **Distribuição por visitante** — cada visitante começa a rodada do ciclo num ponto diferente
+  (semente determinística de visitante + dia), então o primeiro anúncio da página já é
+  distribuído entre os anunciantes.
+- **Cursor de sessão** — ao navegar, o próximo espaço mostra o próximo da fila, sem repetir o
+  mesmo anunciante duas vezes seguidas.
+- **Cotas** — cota total e cota por dia (contagem real, mostrada no painel). Esgotou, o anúncio
+  sai da fila sozinho.
+- **Quem vê o quê** — o site (chave anônima) lê **só o conteúdo** do anúncio (título, empresa,
+  texto, link, imagem, posição, formato, prazo e peso). **Cotas, impressões, cliques e o contato
+  de autorização ficam restritos ao painel**: a chave pública do site não consegue lê-los (o
+  banco devolve 401) e quem entra no Supabase sem ser administrador também não enxerga nada.
+
+**4. Métricas.** Cada matéria conta **visualizações** (aberturas da página) e **cliques**
+(cliques na manchete). As duas ficam na tabela do painel, e o clique na manchete também
+aparece como evento nas visitas.
+
+**5. Contato a partir da matéria (bloco compacto).** No fim da página da matéria existe apenas
+um bloco pequeno, **"O que você busca hoje?"**, com um seletor (Grãos, CTE + MDF-e, Agenciamento
+de cargas, Seguro de cargas) e um **botão dourado de WhatsApp**. Não há telefone, e-mail nem
+bloco de contato repetido na matéria: quem quiser falar com a Q GRÃOS clica no botão.
+
+O botão leva à **ficha de contato da home** (`index.html#contact`) já com o que foi escolhido:
+
+| Parâmetro | Para que serve |
+| --- | --- |
+| `busca` | opção marcada no seletor (vai para o campo "O que busca" da ficha) |
+| `origem=noticia` | avisa que a visita veio da matéria |
+| `materia` | id da notícia (monta a URL de origem do lead) |
+| `titulo` | título da matéria (vira o texto inicial da mensagem: "Sobre a matéria: …") |
+
+Na ficha, o formulário já aparece preenchido com a escolha e com a mensagem pronta, o bloco de
+contato abre rolando até ele (abaixo da navbar fixa) e, ao enviar, o lead é gravado no painel
+com a **URL da matéria como origem** — tanto no `origem_url` do lead quanto no "Link de Origem"
+da mensagem do WhatsApp. O bloco também conta como seção vista no analytics (`leadMateria`).
 
 ## Supabase: banco, notícias, leads e painel
 
@@ -234,14 +333,19 @@ O arquivo `supabase/migrations/20260101000000_qg_init.sql` cria tudo:
 | Objeto | Para que serve |
 | --- | --- |
 | `administradores` | Quem pode entrar no painel (ligado ao `user_id` do Auth) |
-| `noticias` | Notícias do agronegócio (`publicado`, `destaque`, `cliques`) |
+| `noticias` | Notícias do agronegócio (`publicado`, `destaque`, `cliques`, `visualizacoes` e `conteudo`, o texto completo da matéria) |
+| `anuncios` | Espaços patrocinados (empresa, texto, posição, formato, `autorizacao`, `prioridade`, `peso`, `limite_impressoes`, `limite_impressoes_dia`, `impressoes`, `cliques`) — escrita só pelo painel |
+| `anuncio_impressoes_diarias` | Impressões do anúncio por dia (base da cota diária) |
 | `leads` | Contatos do formulário, com `status` e `consentimento` |
 | `visitas` | Pageviews e interações (WhatsApp, seção vista, lead enviado…) |
 | `e_admin()` | Responde “este usuário é admin?” (base das políticas) |
 | `registrar_lead()` | Grava o lead com validação e antispam (5 min) |
 | `registrar_evento()` | Grava um evento de analytics (limite de 60/min por sessão) |
 | `clicar_noticia()` | Soma 1 no contador de cliques da notícia |
-| `vw_*` | Vistas do painel (resumo, leads por dia, visitas por dia/tipo) |
+| `registrar_visualizacao_noticia()` | Soma 1 nas visualizações da notícia (só em notícia publicada) |
+| `registrar_impressao_anuncio()` / `clicar_anuncio()` | Contam a exposição (total e do dia) e o clique do anúncio (CTR no painel) |
+| `anuncios_elegiveis()` | Devolve só o que pode aparecer agora: publicado, no prazo e com cota disponível (base do rodízio) |
+| `vw_*` | Vistas do painel (resumo, leads por dia, visitas por dia/tipo, `vw_anuncios_desempenho` com as impressões de hoje e a cota restante) |
 
 Aplique no **SQL Editor** do Supabase Dashboard (ou via `supabase db push`) colando o
 conteúdo do arquivo. O script é idempotente: pode rodar de novo sem erro.
@@ -311,20 +415,30 @@ A função serve o feed público com cache (`/functions/v1/noticias?limite=6&cat
 ### 5. O que fica gravado (LGPD)
 
 - O formulário grava nome, e-mail, telefone, perfil, o que busca, a mensagem, a URL de origem,
-  o `referrer` e asUTM — **só** se a pessoa marcar a caixa de consentimento.
+  o `referrer` e asUTM — **só** se a pessoa marcar a caixa de consentimento. Quando o lead vem
+  da página de uma matéria, a URL de origem gravada é a da **matéria** (não a da home).
 - **Não** gravamos IP, cookies de terceiros nem geolocalização. Guardamos apenas dois
   identificadores aleatórios (`visitante_id` e `sessao_id`) no `localStorage`/`sessionStorage`
   do próprio navegador, para contar visitantes únicos.
 - Campo isca (`#website`) bloqueia robôs de preenchimento automático.
 - O painel permite **exportar os leads em CSV** e **apagar qualquer lead** a qualquer momento.
+- **Os dados de desempenho dos anúncios são do painel**: o site público lê só o conteúdo do
+  anúncio; cotas, impressões, cliques e o contato de autorização ficam restritos a quem entra
+  como administrador (RLS + permissão por coluna no banco).
 - `/admin` tem `noindex`, `Disallow` no `robots.txt` e `Cache-Control: no-store`.
 
 ### 6. Usar o painel
 
-`/admin` (por exemplo `https://qgraos.com.br/admin/`) tem quatro abas:
+`/admin` (por exemplo `https://qgraos.com.br/admin/`) tem cinco abas:
 
 - **Resumo** — total de leads, leads novos, visitas, visitantes únicos e gráficos de 14 dias;
-- **Notícias** — publicar, editar, destacar e excluir (o que está *publicado* aparece no site);
+- **Notícias** — publicar, editar, destacar e excluir (o que está *publicado* aparece no site),
+  com o texto completo da matéria, o resumo (até 320 caracteres) e as métricas de leitura;
+- **Anúncios** — publicar espaços patrocinados (faixa ou card), definir posição e prazo,
+  registrar a autorização do anunciante e acompanhar impressões, cliques e CTR. Também define
+  o **peso no rodízio** (participação no revezamento), a **prioridade** (ordem no ciclo) e as
+  **cotas** (total e por dia). A tabela mostra as impressões de hoje, a cota restante e o
+  status real de cada anúncio (no ar, fora do prazo, cota esgotada ou rascunho);
 - **Leads** — filtrar, mudar o status (novo / em andamento / convertido / descartado), abrir
   o WhatsApp do cliente, exportar CSV e excluir;
 - **Visitas** — eventos por tipo e as últimas interações.
@@ -420,5 +534,13 @@ Depois de publicar:
 6. **Publicar a primeira notícia** — o painel já abre e publica. É só preencher título,
    resumo e categoria; o que estiver marcado como “Publicar no site” aparece na página
    **`/noticias.html`** na hora (a home mostra apenas o convite para abrir essa página).
-7. **Publicar a Edge Function** — `supabase functions deploy noticias` (opcional: o site
+   Para a **matéria inteira hospedada no site**, cole o texto no campo “Texto completo”.
+7. **Definir a imagem da notícia** — o campo “URL da imagem” vira a capa da matéria e do card.
+   Sem imagem, o site mostra o ícone de muda em vez de um espaço quebrado.
+8. **Publicar a Edge Function** — `supabase functions deploy noticias` (opcional: o site
    funciona sem ela).
+9. **Primeiro anúncio (opcional)** — a aba “Anúncios” publica espaços patrocinados. Antes,
+   combine com o patrocinador a posição (lista de notícias ou fim da matéria), o prazo de
+   veiculação, o **peso no rodízio** (a participação dele no revezamento) e a autorização por
+   escrito (Lei 9.279/1996, art. 37): o painel exige o campo “Autorizado por” para o anúncio
+   ir ao ar.

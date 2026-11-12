@@ -28,6 +28,13 @@
     box-sizing: border-box;
 }
 
+/* O atributo hidden precisa vencer as regras de layout do painel.
+   Sem esta regra, .login-screen (display:flex) continua na tela
+   depois do login e o painel aparece embaixo dele. */
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: 'Outfit', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
     background: var(--bg);
@@ -110,6 +117,7 @@ a {
 .field input[type="url"],
 .field input[type="search"],
 .field input[type="date"],
+.field input[type="number"],
 .field select,
 .field textarea {
     width: 100%;
@@ -136,6 +144,24 @@ a {
     display: flex;
     flex-wrap: wrap;
     gap: 20px;
+}
+
+/* Dica e contador de caracteres */
+.field-hint {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.field-hint.aviso {
+    color: #7A5A00;
+    font-weight: 600;
+}
+
+.field-hint.erro {
+    color: var(--danger);
+    font-weight: 700;
 }
 
 .check {
@@ -489,6 +515,43 @@ a {
 .pill.rascunho {
     background: #EFEFEF;
     color: #6B6B6B;
+}
+
+.pill.pausado {
+    background: #FFF7E0;
+    color: #7A5A00;
+}
+
+.pill.esgotado {
+    background: #FDECEA;
+    color: var(--danger);
+}
+
+/* Explicacao do rodizio de anuncios */
+.rotacao-explica {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #3C3C3C;
+}
+
+.rotacao-explica li {
+    margin-bottom: 8px;
+}
+
+.rotacao-explica strong {
+    color: var(--primary);
+}
+
+.rotacao-nota {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: #F7F9F8;
+    border-left: 3px solid var(--gold);
+    border-radius: 6px;
+    font-size: 0.86rem;
+    color: var(--muted);
 }
 
 .empty {

@@ -40,9 +40,12 @@ function exists(relativePath) {
 const REQUIRED_FILES = [
     'index.html',
     'noticias.html',
+    'noticia.html',
+    'publicidade.html',
     '404.html',
     'style.css',
     'script.js',
+    'noticia.js',
     'site.config.js',
     'supabase-api.js',
     'admin/index.html',
@@ -135,7 +138,7 @@ notes.push('Nenhum script de CDN: apenas arquivos locais');
 notes.push('site.config.js carregado antes de script.js');
 
 /* ---------- 5. Referencias locais existem no disco ---------- */
-const HTML_FILES = ['index.html', 'noticias.html', '404.html'];
+const HTML_FILES = ['index.html', 'noticias.html', 'noticia.html', 'publicidade.html', '404.html'];
 let localReferences = 0;
 
 HTML_FILES.forEach(file => {
@@ -364,8 +367,8 @@ const seoRequired = [
     { pattern: /<script[^>]+type="application\/ld\+json"/, label: 'JSON-LD' }
 ];
 
-// A pagina inicial e a de noticias precisam de SEO completo
-const PAGINAS_SEO = ['index.html', 'noticias.html'];
+// As paginas publicas precisam de SEO completo
+const PAGINAS_SEO = ['index.html', 'noticias.html', 'noticia.html', 'publicidade.html'];
 
 PAGINAS_SEO.forEach(file => {
     const content = read(file);
@@ -391,12 +394,20 @@ PAGINAS_SEO.forEach(file => {
 const canonicalPattern = /<link[^>]+rel="canonical"[^>]+href="([^"]+)"/;
 const canonicalIndex = canonicalPattern.exec(html);
 const canonicalNoticias = canonicalPattern.exec(read('noticias.html'));
+const canonicalNoticia = canonicalPattern.exec(read('noticia.html'));
+const canonicalPublicidade = canonicalPattern.exec(read('publicidade.html'));
 
 if (!canonicalIndex || canonicalIndex[1] !== 'https://qgraos.com.br/') {
     errors.push('index.html sem o canonical https://qgraos.com.br/');
 }
 if (!canonicalNoticias || canonicalNoticias[1] !== 'https://qgraos.com.br/noticias.html') {
     errors.push('noticias.html sem o canonical https://qgraos.com.br/noticias.html');
+}
+if (!canonicalNoticia || canonicalNoticia[1] !== 'https://qgraos.com.br/noticia.html') {
+    errors.push('noticia.html sem o canonical https://qgraos.com.br/noticia.html');
+}
+if (!canonicalPublicidade || canonicalPublicidade[1] !== 'https://qgraos.com.br/publicidade.html') {
+    errors.push('publicidade.html sem o canonical https://qgraos.com.br/publicidade.html');
 }
 notes.push('SEO: canonical, Open Graph, Twitter Card e JSON-LD presentes');
 
@@ -556,8 +567,25 @@ if (!/rpc\(\s*'registrar_evento'/.test(js)) {
 }
 
 // Nada de innerHTML com dado de usuario no script do site
-if (/innerHTML/.test(js)) {
+/* A palavra "innerHTML" pode aparecer numa explicacao do proprio
+ * codigo (comentario) sem que haja risco nenhum: o teste olha so
+ * o codigo que realmente roda. */
+function semComentarios(codigo) {
+    return String(codigo)
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/(^|[;{}])\/\/[^\n]*/g, '$1');
+}
+
+if (/\.innerHTML\s*\+?=/.test(semComentarios(js))) {
     errors.push('script.js usa innerHTML (risco de XSS): use textContent');
+}
+
+const noticiaJs = read('noticia.js');
+if (/\.innerHTML\s*\+?=/.test(semComentarios(noticiaJs))) {
+    errors.push('noticia.js usa innerHTML (risco de XSS): use textContent');
+}
+if (/insertAdjacentHTML|outerHTML\s*=|document\.write/.test(js + noticiaJs)) {
+    errors.push('script.js/noticia.js escreve HTML no DOM: use textContent e createElement');
 }
 
 /* ---------- 20. Painel administrativo ---------- */
@@ -664,6 +692,316 @@ if (!/Disallow:\s*\/admin\/?/i.test(robots)) {
     errors.push('robots.txt nao bloqueia /admin');
 }
 notes.push('robots.txt bloqueia o painel administrativo');
+
+/* ---------- 25. Portal de noticias: materia hospedada, anuncios e filtro ---------- */
+const noticiaHtml = read('noticia.html');
+const publicidadeHtml = read('publicidade.html');
+const portalMigration = read('supabase/migrations/20261111192112_qg_portal_noticias_e_anuncios.sql');
+
+/* Pilar 1: a materia completa mora no banco e aparece em noticia.html */
+if (!/conteudo\s+text/.test(migration)) {
+    errors.push('Migration inicial sem a coluna public.noticias.conteudo (texto completo da materia)');
+}
+if (!/ADD COLUMN IF NOT EXISTS conteudo text/.test(portalMigration)) {
+    errors.push('Migration do portal sem a coluna conteudo em public.noticias');
+}
+if (!/id="noticiaCorpo"/.test(noticiaHtml)) {
+    errors.push('noticia.html sem o container #noticiaCorpo (texto da materia)');
+}
+if (!/id="noticiaErro"/.test(noticiaHtml)) {
+    errors.push('noticia.html sem o estado de erro #noticiaErro (id invalido ou nao publicado)');
+}
+if (!/"@type":\s*"NewsArticle"/.test(noticiaHtml)) {
+    errors.push('noticia.html sem o JSON-LD NewsArticle');
+}
+if (!/name="conteudo"/.test(adminHtml)) {
+    errors.push('admin/index.html sem o campo do texto completo da noticia (name="conteudo")');
+}
+if (!/conteudo/.test(adminJs)) {
+    errors.push('admin/admin.js sem gravar o conteudo da noticia');
+}
+if (!/newsSummaryCount/.test(adminHtml)) {
+    errors.push('admin/index.html sem o contador de caracteres do resumo');
+}
+
+/* O card da listagem leva para a materia interna (nunca para fora) */
+if (!/noticia\.html\?id=/.test(js)) {
+    errors.push('script.js sem o link interno da materia (noticia.html?id=...)');
+}
+if (!/data-noticia-id/.test(js)) {
+    errors.push('script.js sem marcar o card com data-noticia-id (contagem de clique na materia)');
+}
+if (!/clicar_noticia/.test(js)) {
+    errors.push('script.js sem contar o clique na materia (RPC clicar_noticia)');
+}
+
+/* Pilar 2: anuncios com selo, link marcado e transparencia */
+if (!/CREATE TABLE IF NOT EXISTS public\.anuncios/.test(portalMigration)) {
+    errors.push('Migration do portal sem a tabela public.anuncios');
+}
+if (!/autorizacao text/.test(portalMigration)) {
+    errors.push('Tabela public.anuncios sem a coluna autorizacao (prova de autorizacao do anunciante)');
+}
+if (!/ENABLE ROW LEVEL SECURITY/.test(portalMigration)) {
+    errors.push('Tabela public.anuncios sem ENABLE ROW LEVEL SECURITY');
+}
+if (!/sponsored nofollow noopener/.test(js)) {
+    errors.push('script.js sem a marcacao rel="sponsored nofollow noopener" nos links de anunciante');
+}
+if (!/Publicidade/.test(js)) {
+    errors.push('script.js sem o selo de Publicidade nos anuncios');
+}
+if (!/publicidade\.html/.test(js)) {
+    errors.push('script.js sem o link para a politica de publicidade (publicidade.html)');
+}
+if (!/publicidade\.html/.test(noticiaHtml)) {
+    errors.push('noticia.html sem o link para a politica de publicidade');
+}
+['sponsored nofollow noopener', '9.279/1996', 'pixel', 'não endossa'].forEach(termo => {
+    if (publicidadeHtml.indexOf(termo) === -1) {
+        errors.push('publicidade.html sem o trecho obrigatorio: "' + termo + '"');
+    }
+});
+if (!/name="autorizacao"/.test(adminHtml)) {
+    errors.push('admin/index.html sem o campo "Autorizado por (contato)" (name="autorizacao")');
+}
+
+/* Nenhum script de rastreamento de terceiros no site */
+if (/doubleclick|google-analytics|googletagmanager|connect\.facebook|hotjar|clarity\.ms/i.test(js + noticiaJs)) {
+    errors.push('script.js/noticia.js carrega script de rastreamento de terceiros (use so contadores internos)');
+}
+
+/* O anuncio nunca entra no cabecalho do site */
+HTML_FILES.forEach(file => {
+    const conteudo = read(file);
+    const blocos = conteudo.match(/<nav class="navbar"[\s\S]*?<\/nav>/g) || [];
+
+    blocos.forEach(bloco => {
+        if (/anuncio|publicidade/i.test(bloco)) {
+            errors.push('Anuncio dentro do cabecalho em ' + file + ' (o cabeçalho nao leva anuncio)');
+        }
+    });
+});
+
+/* Pilar 3: filtro por categoria com varios valores */
+if (!/id="filtroCategorias"/.test(read('noticias.html'))) {
+    errors.push('noticias.html sem o bloco de filtro #filtroCategorias');
+}
+if (!/id="filtroChips"/.test(read('noticias.html'))) {
+    errors.push('noticias.html sem o container #filtroChips');
+}
+if (!/aria-pressed/.test(js)) {
+    errors.push('script.js sem aria-pressed nos chips de categoria');
+}
+if (!/history\.replaceState/.test(js)) {
+    errors.push('script.js sem guardar a selecao de categoria na URL (history.replaceState)');
+}
+/* O filtro de varias categorias monta a consulta do banco assim:
+ * or=(categoria.eq.Soja,categoria.eq.Milho) — o "or=(" vem de um
+ * trecho e a lista de categorias vem de outro, entao os dois
+ * pedacos sao conferidos separadamente. */
+if (!/or=\(/.test(js) || !/categoria\.eq\./.test(js)) {
+    errors.push('script.js sem o filtro de varias categorias (or=(categoria.eq....))');
+}
+
+/* O painel tem a aba de anuncios */
+if (!/data-tab="anuncios"/.test(adminHtml)) {
+    errors.push('admin/index.html sem a aba de Anuncios');
+}
+if (!/adTableBody/.test(adminHtml)) {
+    errors.push('admin/index.html sem a tabela de anuncios (#adTableBody)');
+}
+if (!/clicar_anuncio/.test(js)) {
+    errors.push('script.js sem contar o clique no anuncio (RPC clicar_anuncio)');
+}
+if (!/registrar_impressao_anuncio/.test(js)) {
+    errors.push('script.js sem contar a impressao do anuncio (RPC registrar_impressao_anuncio)');
+}
+
+/* Metrica da materia: quantas vezes a noticia foi aberta.
+   O contador e interno (sem pixel de terceiro). */
+const migrationsSql = fs.readdirSync(path.join(ROOT, 'supabase/migrations'))
+    .filter(nome => nome.endsWith('.sql'))
+    .map(nome => fs.readFileSync(path.join(ROOT, 'supabase/migrations', nome), 'utf8'))
+    .join('\n');
+
+if (!/visualizacoes\s+integer/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a coluna public.noticias.visualizacoes');
+}
+if (!/registrar_visualizacao_noticia/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a RPC registrar_visualizacao_noticia');
+}
+if (!/registrar_visualizacao_noticia/.test(noticiaJs)) {
+    errors.push('noticia.js sem contar a visualizacao da materia (RPC registrar_visualizacao_noticia)');
+}
+if (!/visualizacoes/.test(adminJs)) {
+    errors.push('admin/admin.js sem mostrar as visualizacoes da materia no painel');
+}
+
+/* O contador de clique tem de reconhecer a classe que o card usa:
+   o card da manchete e o proprio link, entao se as classes nao
+   baterem o `clicar_noticia` nunca dispara. */
+const classeDoCard = (js.match(/card\.className\s*=\s*'([^']*)'/) || [])[1] || '';
+const classesDoCard = classeDoCard.split(/\s+/).filter(Boolean);
+
+if (!classesDoCard.length) {
+    errors.push('script.js sem a classe do card da manchete');
+} else if (!classesDoCard.some(classe => js.includes("classList.contains('" + classe + "')"))) {
+    errors.push('script.js: o contador de clique nao reconhece a classe do card (' +
+        classesDoCard.join(' ') + ')');
+}
+
+/* Nenhuma imagem sem src: o navegador mostraria um quadro quebrado */
+HTML_FILES.forEach(file => {
+    const content = read(file);
+    const tags = content.match(/<img\b[^>]*>/g) || [];
+
+    tags.forEach(tag => {
+        if (!/\ssrc=/.test(tag)) {
+            errors.push('Imagem sem src em ' + file + ': ' + tag.slice(0, 90));
+        }
+    });
+});
+
+notes.push('Portal de noticias: materia hospedada, anuncios com selo e filtro por categoria conferidos');
+notes.push('Metricas da materia conferidas: visualizacoes (RPC) e clique (classe do card)');
+
+/* ---------- 26. Rotacao de anuncios (rodizio real) ---------- */
+
+/* O banco precisa saber quem pode aparecer agora: a funcao
+   anuncios_elegiveis e o que garante prazo e cota na pratica. */
+if (!/CREATE OR REPLACE FUNCTION public\.anuncios_elegiveis/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a RPC public.anuncios_elegiveis (elegibilidade do anuncio)');
+}
+if (!/CREATE TABLE IF NOT EXISTS public\.anuncio_impressoes_diarias/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a tabela public.anuncio_impressoes_diarias (cota diaria)');
+}
+if (!/vw_anuncios_desempenho/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a view public.vw_anuncios_desempenho (painel)');
+}
+if (!/ADD COLUMN IF NOT EXISTS peso integer/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a coluna peso em public.anuncios (peso do rodizio)');
+}
+if (!/ADD COLUMN IF NOT EXISTS limite_impressoes integer/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a coluna limite_impressoes em public.anuncios (cota total)');
+}
+if (!/ADD COLUMN IF NOT EXISTS limite_impressoes_dia integer/.test(migrationsSql)) {
+    errors.push('Nenhuma migration cria a coluna limite_impressoes_dia em public.anuncios (cota diaria)');
+}
+
+/* O motor do rodizio no script.js: fila ponderada, semente por
+   visitante/dia e cursor de sessao. */
+['montarCicloAnuncio', 'proximoAnuncioEspaco', 'sementeAnuncio', 'hashAnuncio'].forEach(peca => {
+    if (js.indexOf(peca) === -1) {
+        errors.push('script.js sem a parte do rodizio: ' + peca);
+    }
+});
+if (!/rpc\(\s*'anuncios_elegiveis'/.test(js)) {
+    errors.push('script.js nao consulta a RPC anuncios_elegiveis (elegibilidade no banco)');
+}
+if (!/p_posicao/.test(js) || !/p_formato/.test(js)) {
+    errors.push('script.js nao envia posicao e formato para a RPC anuncios_elegiveis');
+}
+if (!/qg_espaco_/.test(js)) {
+    errors.push('script.js sem guardar o cursor do rodizio por sessao (sessionStorage)');
+}
+if (!/window\.QGAnuncios/.test(js)) {
+    errors.push('script.js sem expor o motor de anuncios (window.QGAnuncios)');
+}
+
+/* O fim da materia usa o mesmo motor (mesmo rodizio, formato certo) */
+if (!/QGAnuncios/.test(noticiaJs)) {
+    errors.push('noticia.js sem usar o motor de anuncios (window.QGAnuncios)');
+}
+
+/* O painel precisa falar de peso e de cotas */
+if (!/name="peso"/.test(adminHtml)) {
+    errors.push('admin/index.html sem o campo de peso do anuncio (name="peso")');
+}
+if (!/name="limite_impressoes"/.test(adminHtml)) {
+    errors.push('admin/index.html sem o campo de cota total (name="limite_impressoes")');
+}
+if (!/name="limite_impressoes_dia"/.test(adminHtml)) {
+    errors.push('admin/index.html sem o campo de cota diaria (name="limite_impressoes_dia")');
+}
+if (!/impressoes_hoje/.test(adminJs)) {
+    errors.push('admin/admin.js sem mostrar as impressoes de hoje do anuncio');
+}
+if (!/vw_anuncios_desempenho/.test(adminJs)) {
+    errors.push('admin/admin.js sem ler a view vw_anuncios_desempenho');
+}
+
+/* ---------- 27. Tela de login do painel: o login tem de sumir ---------- */
+/* Sem a regra [hidden] abaixo, o display:flex do .login-screen vencia o
+   atributo hidden e o painel aparecia embaixo da tela de login. */
+const adminCss = read('admin/admin.css');
+
+if (!/\[hidden\]\s*\{[^}]*display:\s*none\s*!important/.test(adminCss)) {
+    errors.push('admin/admin.css sem a regra [hidden] { display: none !important } (a tela de login continua aberta depois do login)');
+}
+if (!/id="loginScreen"/.test(adminHtml)) {
+    errors.push('admin/index.html sem a tela de login (#loginScreen)');
+}
+if (!/id="app"/.test(adminHtml)) {
+    errors.push('admin/index.html sem o painel (#app)');
+}
+if (!/byId\('loginScreen'\)\.hidden\s*=\s*true/.test(adminJs)) {
+    errors.push('admin/admin.js sem esconder a tela de login depois de entrar');
+}
+if (!/byId\('app'\)\.hidden\s*=\s*false/.test(adminJs)) {
+    errors.push('admin/admin.js sem mostrar o painel depois de entrar');
+}
+
+notes.push('Rotacao de anuncios: peso, prioridade (ordem no ciclo), cotas e elegibilidade no banco conferidas');
+notes.push('Painel: regra [hidden] confere (a tela de login some depois do login)');
+
+/* ---------- 28. Privacidade dos anuncios: quem ve o que ---------- */
+/* O site (chave anonima) le o conteudo do anuncio. Cotas, metricas e o
+   contato de autorizacao ficam so no painel: o banco precisa barrar. */
+if (!/REVOKE ALL ON public\.anuncios FROM anon/.test(migrationsSql)) {
+    errors.push('Nenhuma migration tira do papel anon a leitura inteira da tabela anuncios');
+}
+if (!/GRANT SELECT \([\s\S]{0,400}?\) ON public\.anuncios TO anon/.test(migrationsSql)) {
+    errors.push('Nenhuma migration libera no papel anon apenas as colunas publicas de public.anuncios');
+}
+if (!/REVOKE ALL ON public\.anuncio_impressoes_diarias FROM anon/.test(migrationsSql)) {
+    errors.push('A contagem diaria de impressoes continua visivel para a chave anonima (e dado do painel)');
+}
+if (!/REVOKE ALL ON public\.vw_anuncios_desempenho FROM anon/.test(migrationsSql)) {
+    errors.push('A view de desempenho continua visivel para a chave anonima (e dado do painel)');
+}
+if (!/CREATE POLICY anuncios_leitura_publica[\s\S]{0,200}?FOR SELECT TO anon/.test(migrationsSql)) {
+    errors.push('A leitura publica do anuncio nao esta restrita ao papel anon (quem entra com conta sem ser admin veria o que esta pausado)');
+}
+
+/* A RPC do rodizio nao pode devolver o contato de autorizacao */
+const inicioElegiveis = migrationsSql.lastIndexOf('CREATE FUNCTION public.anuncios_elegiveis');
+
+if (inicioElegiveis === -1) {
+    errors.push('A RPC anuncios_elegiveis nao foi recriada com a lista de colunas publica');
+} else {
+    const fimElegiveis = migrationsSql.indexOf('$$;', inicioElegiveis);
+    const corpoElegiveis = migrationsSql.slice(
+        inicioElegiveis,
+        fimElegiveis === -1 ? inicioElegiveis + 1500 : fimElegiveis
+    );
+
+    if (/autorizacao/.test(corpoElegiveis)) {
+        errors.push('A RPC anuncios_elegiveis ainda devolve a coluna autorizacao (contato do anunciante)');
+    }
+}
+
+/* O site nao pode pedir coluna privada do anuncio */
+['limite_impressoes', 'autorizacao'].forEach(coluna => {
+    if (js.indexOf(coluna) !== -1) {
+        errors.push('script.js pede a coluna privada "' + coluna + '" (o publico nao deve ver dado do painel)');
+    }
+});
+if (/select=[^;]{0,300}\b(impressoes|cliques)\b/.test(js)) {
+    errors.push('script.js pede as metricas (impressoes/cliques) do anuncio (sao dados do painel)');
+}
+
+notes.push('Privacidade dos anuncios: o publico ve o conteudo, o painel ve cotas, metricas e autorizacao');
 
 /* ---------- Relatorio ---------- */
 function report() {

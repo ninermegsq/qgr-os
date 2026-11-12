@@ -21,6 +21,7 @@
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const { spawn } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
@@ -51,6 +52,8 @@ const VIEWPORTS = [
 const PAGES = [
     { name: 'home', url: '/' },
     { name: 'noticias', url: '/noticias.html' },
+    { name: 'noticia', url: '/noticia.html' },
+    { name: 'publicidade', url: '/publicidade.html' },
     { name: '404', url: '/404.html' },
     { name: 'admin', url: '/admin/' }
 ];
@@ -126,6 +129,25 @@ function auditDom() {
 
     // Elementos que passam da borda da tela (podem estar cortados pelo overflow hidden)
     const offenders = [];
+
+    /* Faixa que rola na horizontal (ex.: os chips de filtro no celular):
+       o que sobra da tela ali e de proposito, o visitante arrasta com o
+       dedo. Quando um ancestral rola na horizontal, o item nao vaza:
+       o problema real (a pagina inteira rolando) e medido em
+       result.scroll.hasHorizontalScroll. */
+    function dentroDeFaixaQueRola(element) {
+        let node = element.parentElement;
+
+        while (node && node !== document.body) {
+            const estilo = getComputedStyle(node);
+            const rola = ['auto', 'scroll'].indexOf(estilo.overflowX) !== -1;
+            if (rola && node.scrollWidth > node.clientWidth + 1) return true;
+            node = node.parentElement;
+        }
+
+        return false;
+    }
+
     document.querySelectorAll('body *').forEach(element => {
         if (element.closest('svg[aria-hidden="true"]')) return;
         const style = getComputedStyle(element);
@@ -133,6 +155,7 @@ function auditDom() {
         const rect = element.getBoundingClientRect();
         if (!rect.width && !rect.height) return;
         if (rect.right > viewportWidth + 1 || rect.left < -1) {
+            if (dentroDeFaixaQueRola(element)) return;
             const className = typeof element.className === 'string'
                 ? element.className
                 : (element.className.baseVal || '');
@@ -209,6 +232,9 @@ function auditDom() {
     /* ---------- Imagens ---------- */
     result.images = Array.from(document.images).map(image => ({
         src: image.getAttribute('src'),
+        /* Imagem sem src e um espaco reservado que o JS preenche
+           (a capa da materia, por exemplo): nao conta como falha. */
+        hasSrc: image.hasAttribute('src') && !!image.getAttribute('src'),
         alt: image.getAttribute('alt'),
         loaded: image.complete && image.naturalWidth > 0,
         natural: image.naturalWidth + 'x' + image.naturalHeight,
@@ -489,6 +515,12 @@ function auditDom() {
         sectionExists: !!document.getElementById('noticias'),
         gridExists: !!newsGrid,
         cards: newsGrid ? newsGrid.querySelectorAll('.news-card').length : 0,
+        /* O card da manchete precisa ter a classe que o contador de clique
+           do script.js reconhece e o id da noticia: sem os dois a metrica
+           de cliques nao e alimentada. */
+        cardsSemClasse: newsGrid ? newsGrid.querySelectorAll('.news-card:not(.news-card-link)').length : 0,
+        cardsSemId: newsGrid ? newsGrid.querySelectorAll('.news-card:not([data-noticia-id])').length : 0,
+        cardsParaFora: newsGrid ? newsGrid.querySelectorAll('.news-card:not([href^="noticia.html?id="])').length : 0,
         emptyMessage: newsEmpty ? (newsEmpty.textContent || '').trim().slice(0, 80) : '',
         navWhatsappExists: !!navWhatsapp,
         navWhatsappVisible: navWhatsapp ? navWhatsapp.getBoundingClientRect().width > 0 : false,
@@ -496,6 +528,105 @@ function auditDom() {
         linkParaPaginaDeNoticias: !!linkNoticias,
         botaoMaisExiste: !!botaoMais,
         botaoMaisVisivel: botaoMais ? botaoMais.getBoundingClientRect().width > 0 : false
+    };
+
+    /* ---------- Pagina da materia hospedada ---------- */
+    const corpo = document.getElementById('noticiaCorpo');
+    const estadoErro = document.getElementById('noticiaErro');
+    const conteudo = document.getElementById('noticiaConteudo');
+    const blocoAnuncio = document.getElementById('noticiaAnuncio');
+    const maisNoticias = document.getElementById('maisNoticias');
+    const gradeMais = document.getElementById('newsMaisGrid');
+
+    const linkCanonical = document.querySelector('link[rel="canonical"]');
+    const blocoLd = document.getElementById('noticiaLdJson');
+
+    let tipoLd = '';
+    try {
+        tipoLd = JSON.parse((blocoLd && blocoLd.textContent) || '{}')['@type'] || '';
+    } catch (erro) {
+        tipoLd = '';
+    }
+
+    const metaOg = document.querySelector('meta[property="og:title"]');
+    const metaTwitter = document.querySelector('meta[name="twitter:card"]');
+
+    result.noticia = {
+        corpoExiste: !!corpo,
+        erroExiste: !!estadoErro,
+        erroVisivel: estadoErro ? !estadoErro.hidden : false,
+        conteudoVisivel: conteudo ? !conteudo.hidden : false,
+        titulo: (document.getElementById('noticiaTitulo') || { textContent: '' }).textContent.trim().slice(0, 80),
+        paragrafos: corpo ? corpo.querySelectorAll('p, h2, ul').length : 0,
+        canonical: linkCanonical ? (linkCanonical.getAttribute('href') || '') : '',
+        jsonLdTipo: tipoLd,
+        ogTitle: metaOg ? (metaOg.getAttribute('content') || '') : '',
+        twitterCard: metaTwitter ? (metaTwitter.getAttribute('content') || '') : '',
+        blocosAnuncio: blocoAnuncio ? blocoAnuncio.querySelectorAll('[data-anuncio-id]').length : 0,
+        seloVisivel: blocoAnuncio ? blocoAnuncio.querySelectorAll('.anuncio-selo').length : 0,
+        avisoAnuncio: blocoAnuncio ? blocoAnuncio.querySelectorAll('.anuncio-aviso').length : 0,
+        maisNoticiasExiste: !!maisNoticias,
+        maisNoticiasCards: gradeMais ? gradeMais.querySelectorAll('.news-card').length : 0,
+        maisNoticiasSemClasse: gradeMais ? gradeMais.querySelectorAll('.news-card:not(.news-card-link)').length : 0,
+        maisNoticiasSemId: gradeMais ? gradeMais.querySelectorAll('.news-card:not([data-noticia-id])').length : 0
+    };
+
+    /* ---------- Filtro por categoria ---------- */
+    const filtro = document.getElementById('filtroCategorias');
+    const chips = document.getElementById('filtroChips');
+
+    result.filtro = {
+        containerExiste: !!filtro,
+        chipsExiste: !!chips,
+        chips: chips ? chips.querySelectorAll('button[aria-pressed]').length : 0,
+        chipsPressionados: chips ? chips.querySelectorAll('button[aria-pressed="true"]').length : 0,
+        urlTemCategoria: window.location.search.indexOf('categoria=') !== -1,
+        canonical: (document.querySelector('link[rel="canonical"]') || { getAttribute: () => '' })
+            .getAttribute('href') || '',
+        robots: (document.querySelector('meta[name="robots"]') || { getAttribute: () => '' })
+            .getAttribute('content') || '',
+        cards: (document.getElementById('newsGrid') || { querySelectorAll: () => [] })
+            .querySelectorAll('.news-card').length
+    };
+
+    /* ---------- Anuncios e selo de publicidade ---------- */
+    const selos = document.querySelectorAll('.anuncio-selo');
+
+    /* So conta como bloco o elemento que carrega o formato pedido pelo
+       anunciante. Dentro do bloco, o botao "Saiba mais" tambem leva o id
+       do anuncio, mas ele e o link, nao um bloco na tela. */
+    const blocosAnuncio = Array.from(document.querySelectorAll('[data-anuncio-formato]'));
+
+    /* O bloco precisa combinar com o formato pedido pelo anunciante:
+       faixa = .anuncio-faixa, card = .anuncio-card. */
+    const formatosIncorretos = blocosAnuncio.filter(bloco => {
+        const formato = bloco.getAttribute('data-anuncio-formato') || '';
+        if (formato === 'faixa') return !bloco.classList.contains('anuncio-faixa');
+        if (formato === 'card') return !bloco.classList.contains('anuncio-card');
+        return true;
+    }).length;
+
+    const idsAnuncio = blocosAnuncio
+        .map(bloco => bloco.getAttribute('data-anuncio-id'))
+        .filter(Boolean);
+
+    result.ad = {
+        selos: selos.length,
+        linksSponsored: document.querySelectorAll('a[rel*="sponsored"]').length,
+        linksSemNoFollow: Array.from(document.querySelectorAll('a[rel*="sponsored"]'))
+            .filter(link => (link.getAttribute('rel') || '').indexOf('nofollow') === -1).length,
+        /* Rodizio: o que o site colocou na tela de verdade */
+        blocos: blocosAnuncio.length,
+        formatosIncorretos: formatosIncorretos,
+        semFormato: blocosAnuncio.filter(bloco => !bloco.getAttribute('data-anuncio-formato')).length,
+        /* O mesmo anunciante nao pode aparecer duas vezes na mesma tela */
+        idsDuplicados: idsAnuncio.length - new Set(idsAnuncio).size,
+        /* Todo bloco patrocinado precisa do selo visivel de Publicidade */
+        blocosSemSelo: blocosAnuncio.filter(bloco => !bloco.querySelector('.anuncio-selo')).length,
+        motorPresente: typeof window.QGAnuncios === 'object' && window.QGAnuncios !== null,
+        cicloMontado: typeof window.QGAnuncios === 'object' && window.QGAnuncios !== null
+            ? Object.keys(window.QGAnuncios).length > 0
+            : false
     };
 
     /* ---------- Foco visivel no teclado ---------- */
@@ -510,6 +641,67 @@ function auditDom() {
     }
 
     return result;
+}
+
+/* ------------------------------------------------------------------
+ * Conteudo de verdade (noticia e anuncio publicados)
+ * ------------------------------------------------------------------ */
+
+/* Le a url e a chave publica do site */
+function configuracaoSite() {
+    try {
+        const conteudo = fs.readFileSync(path.join(ROOT, 'site.config.js'), 'utf8');
+        const url = (conteudo.match(/url:\s*'([^']+)'/) || [])[1] || '';
+        const chave = (conteudo.match(/anonKey:\s*'([^']*)'/) || [])[1] || '';
+
+        return { url: url.trim(), chave: chave.trim() };
+    } catch (erro) {
+        return { url: '', chave: '' };
+    }
+}
+
+/* Consulta o Supabase (somente leitura, chave publica) e devolve uma
+ * noticia publicada de verdade. Sem noticia publicada a pagina da
+ * materia so pode ser testada no estado de erro. */
+function buscarNoticiaPublicada() {
+    const config = configuracaoSite();
+
+    if (!config.url || !config.chave) return Promise.resolve(null);
+
+    const caminho = '/rest/v1/noticias?select=id,categoria&publicado=eq.true' +
+        '&order=publicado_em.desc&limit=1';
+
+    return new Promise(resolve => {
+        try {
+            const requisicao = https.request(config.url + caminho, {
+                method: 'GET',
+                timeout: 8000,
+                headers: {
+                    apikey: config.chave,
+                    Accept: 'application/json'
+                }
+            }, resposta => {
+                let corpo = '';
+                resposta.setEncoding('utf8');
+                resposta.on('data', parte => { corpo += parte; });
+                resposta.on('end', () => {
+                    if (resposta.statusCode !== 200) return resolve(null);
+                    try {
+                        const linhas = JSON.parse(corpo);
+                        resolve(Array.isArray(linhas) && linhas[0] ? linhas[0] : null);
+                    } catch (erro) {
+                        resolve(null);
+                    }
+                });
+            });
+
+            requisicao.on('error', () => resolve(null));
+            requisicao.on('timeout', () => { requisicao.destroy(); resolve(null); });
+            requisicao.end();
+        } catch (erro) {
+            resolve(null);
+        }
+    });
 }
 
 /* ------------------------------------------------------------------
@@ -651,13 +843,43 @@ async function verificarPainelAdmin(browser, report) {
                 report.problems.push(label + ': login do painel falhou' + (alerta ? ' -> ' + alerta : ''));
             }
         } else {
+            /* O bug relatado: depois do login, a tela de login continuava
+               aberta e o painel aparecia embaixo dela. A causa era o
+               atributo hidden ser vencido pelo display:flex do
+               .login-screen — por isso a conferimos de verdade (display
+               computed e altura), e nao so o atributo. */
+            const telaDepois = await page.evaluate(() => {
+                const login = document.getElementById('loginScreen');
+                const app = document.getElementById('app');
+                const estiloLogin = login ? getComputedStyle(login) : null;
+                const estiloApp = app ? getComputedStyle(app) : null;
+
+                return {
+                    loginComHidden: !!login && login.hidden,
+                    loginDisplay: estiloLogin ? estiloLogin.display : '',
+                    loginAltura: login ? Math.round(login.getBoundingClientRect().height) : 0,
+                    appDisplay: estiloApp ? estiloApp.display : '',
+                    appAltura: app ? Math.round(app.getBoundingClientRect().height) : 0,
+                    appVisivel: !!app && !app.hidden && app.getBoundingClientRect().height > 0
+                };
+            });
+
+            painel.telaDepoisDoLogin = telaDepois;
+
+            if (!telaDepois.loginComHidden || telaDepois.loginDisplay !== 'none' || telaDepois.loginAltura > 0) {
+                report.problems.push('admin/login: a tela de login continua visivel depois do login (o painel abre embaixo dela)');
+            }
+            if (!telaDepois.appVisivel) {
+                report.problems.push('admin/login: o painel nao ficou visivel depois do login');
+            }
+
             // Espera o resumo preencher os cartoes
             await page.waitForFunction(() => {
                 const cartoes = document.getElementById('cardsResumo');
                 return !!cartoes && cartoes.children.length > 0;
             }, { timeout: 15000 }).catch(() => { /* dealtido nas regras abaixo */ });
 
-            const abas = ['resumo', 'noticias', 'leads', 'visitas'];
+            const abas = ['resumo', 'noticias', 'anuncios', 'leads', 'visitas'];
 
             for (const aba of abas) {
                 await page.evaluate(nome => {
@@ -772,6 +994,7 @@ async function verificarPainelAdmin(browser, report) {
         status: resposta ? resposta.status() : 0,
         screenshot: path.relative(ROOT, shot).replace(/\\/g, '/'),
         tela: tela,
+        telaDepoisDoLogin: painel.telaDepoisDoLogin || null,
         credencial: credenciais ? credenciais.origem : null,
         logado: painel.logado,
         abas: painel.abas,
@@ -880,7 +1103,28 @@ async function main() {
         notes: []
     };
 
-    for (const target of PAGES) {
+    /* Paginas com conteudo de verdade: a materia hospedada e a
+       listagem filtrada so fazem sentido com noticia publicada. */
+    const paginas = PAGES.slice();
+    const noticiaPublicada = await buscarNoticiaPublicada();
+
+    if (noticiaPublicada && noticiaPublicada.id) {
+        paginas.push({
+            name: 'noticia-publicada',
+            url: '/noticia.html?id=' + encodeURIComponent(noticiaPublicada.id)
+        });
+
+        if (noticiaPublicada.categoria) {
+            paginas.push({
+                name: 'noticias-filtradas',
+                url: '/noticias.html?categoria=' + encodeURIComponent(noticiaPublicada.categoria)
+            });
+        }
+    } else {
+        report.notes.push('Nenhuma noticia publicada no banco: a materia e o filtro foram testados so com o aviso amigavel');
+    }
+
+    for (const target of paginas) {
         report.pages[target.name] = {};
 
         for (const viewport of VIEWPORTS) {
@@ -1215,9 +1459,27 @@ async function main() {
                 report.notes.push(label + ': simbolos sem uso no sprite: ' + dom.unusedSymbols.join(', '));
             }
             dom.images.forEach(image => {
+                if (!image.hasSrc) return;
                 if (!image.loaded) report.problems.push(label + ': imagem nao carregou -> ' + image.src);
                 if (!image.hasAlt) report.problems.push(label + ': imagem sem alt -> ' + image.src);
             });
+
+            /* ---------- Anuncios na tela ---------- */
+            if (dom.ad.selos > 0 && dom.ad.linksSemNoFollow > 0) {
+                report.problems.push(label + ': link de anuncio sem rel="nofollow"');
+            }
+            if (dom.ad.formatosIncorretos > 0) {
+                report.problems.push(label + ': ' + dom.ad.formatosIncorretos +
+                    ' bloco(s) de anuncio com formato diferente do pedido pelo anunciante');
+            }
+            if (dom.ad.blocosSemSelo > 0) {
+                report.problems.push(label + ': ' + dom.ad.blocosSemSelo +
+                    ' bloco(s) de anuncio sem o selo visivel de "Publicidade"');
+            }
+            if (dom.ad.idsDuplicados > 0) {
+                report.problems.push(label + ': o mesmo anuncio aparece ' +
+                    (dom.ad.idsDuplicados + 1) + ' vezes na mesma tela');
+            }
             if (dom.reveal.hidden.length) {
                 report.problems.push(label + ': ' + dom.reveal.hidden.length +
                     ' elemento(s) com reveal nao apareceram: ' +
@@ -1360,6 +1622,68 @@ async function main() {
                 if (dom.news.navWhatsappExists) {
                     report.problems.push(label + ': botao de WhatsApp da navegacao presente');
                 }
+                // O filtro por categoria precisa existir e ser operavel
+                // pelo teclado (botoes com aria-pressed).
+                if (!dom.filtro.containerExiste) {
+                    report.problems.push(label + ': filtro de categoria ausente (#filtroCategorias)');
+                }
+                if (!dom.filtro.chipsExiste) {
+                    report.problems.push(label + ': container dos chips de categoria ausente (#filtroChips)');
+                }
+                if (dom.filtro.chips > 0 && dom.filtro.chipsPressionados > 1) {
+                    report.problems.push(label + ': mais de uma categoria marcada ao mesmo tempo');
+                }
+            }
+
+            /* A listagem (com ou sem filtro) e o bloco "Mais noticias"
+               usam o mesmo card: ele precisa ter a classe que o contador
+               de clique do script.js reconhece e o id da noticia. Sem os
+               dois, o clique na manchete nao vira metrica. */
+            if (target.name === 'noticias' || target.name === 'noticias-filtradas') {
+                if (dom.news.cardsSemClasse > 0) {
+                    report.problems.push(label + ': ' + dom.news.cardsSemClasse +
+                        ' card(s) de noticia sem a classe "news-card-link" (o contador de clique nao os reconhece)');
+                }
+                if (dom.news.cardsSemId > 0) {
+                    report.problems.push(label + ': ' + dom.news.cardsSemId +
+                        ' card(s) de noticia sem "data-noticia-id" (o clique na manchete nao vira metrica)');
+                }
+                if (dom.news.cardsParaFora > 0) {
+                    report.problems.push(label + ': ' + dom.news.cardsParaFora +
+                        ' card(s) de noticia apontando para fora do site (a materia deve ser hospedada aqui)');
+                }
+            }
+
+            // A materia hospedada: sem id na URL o site precisa mostrar a
+            // mensagem amigavel, nunca uma tela quebrada.
+            if (target.name === 'noticia') {
+                if (!dom.noticia.corpoExiste) {
+                    report.problems.push(label + ': container do texto da materia ausente (#noticiaCorpo)');
+                }
+                if (!dom.noticia.erroExiste) {
+                    report.problems.push(label + ': estado de erro da materia ausente (#noticiaErro)');
+                }
+                if (!dom.noticia.erroVisivel && !dom.noticia.conteudoVisivel) {
+                    report.problems.push(label + ': a pagina da materia nao mostrou nem o texto nem o aviso de erro');
+                }
+                if (!dom.noticia.maisNoticiasExiste) {
+                    report.problems.push(label + ': bloco "Mais noticias" ausente');
+                }
+                if (dom.noticia.maisNoticiasSemClasse > 0) {
+                    report.problems.push(label + ': ' + dom.noticia.maisNoticiasSemClasse +
+                        ' card(s) de "Mais noticias" sem a classe "news-card-link" (o contador de clique nao os reconhece)');
+                }
+                if (dom.noticia.maisNoticiasSemId > 0) {
+                    report.problems.push(label + ': ' + dom.noticia.maisNoticiasSemId +
+                        ' card(s) de "Mais noticias" sem "data-noticia-id" (o clique na manchete nao vira metrica)');
+                }
+            }
+            // A transparencia de publicidade precisa existir e citar a lei
+            if (target.name === 'publicidade') {
+                const texto = await page.evaluate(() => document.body.textContent || '');
+                if (texto.indexOf('9.279/1996') === -1) {
+                    report.problems.push(label + ': a politica de publicidade nao cita a Lei 9.279/1996');
+                }
             }
 
             await page.close();
@@ -1402,6 +1726,7 @@ async function main() {
             ' | aba resumo: ' + (painel.abas.resumo ? painel.abas.resumo.cartoes + ' cartao(s)' : '-') +
             ' | leads: ' + (painel.abas.leads ? painel.abas.leads.linhas + ' linha(s)' : '-') +
             ' | noticias: ' + (painel.abas.noticias ? painel.abas.noticias.linhas + ' linha(s)' : '-') +
+            ' | anuncios: ' + (painel.abas.anuncios ? painel.abas.anuncios.linhas + ' linha(s)' : '-') +
             ' | visitas: ' + (painel.abas.visitas ? painel.abas.visitas.linhas + ' linha(s)' : '-') +
             ' | lead de teste apagado: ' + (painel.limpeza ? painel.limpeza.apagados : '-') +
             ' | visitas de teste apagadas: ' + (painel.limpezaVisitas ? painel.limpezaVisitas.apagadas : '-'));

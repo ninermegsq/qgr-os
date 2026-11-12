@@ -37,9 +37,20 @@ function request(urlPath) {
 }
 
 function collectReferences() {
-    const references = new Set(['/style.css', '/script.js', '/site.config.js', '/404.html', '/robots.txt', '/sitemap.xml']);
+    const references = new Set([
+        '/style.css',
+        '/script.js',
+        '/site.config.js',
+        '/404.html',
+        '/robots.txt',
+        '/sitemap.xml',
+        '/noticias.html',
+        '/noticia.html',
+        '/noticia.js',
+        '/publicidade.html'
+    ]);
 
-    ['index.html', '404.html'].forEach(file => {
+    ['index.html', '404.html', 'noticias.html', 'noticia.html', 'publicidade.html'].forEach(file => {
         const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
         const pattern = /(?:src|href)="([^"]+)"/g;
         let match;
@@ -115,6 +126,36 @@ async function main() {
         results.push('GET /404.html  ->  200');
     } else {
         failures.push('GET /404.html  ->  ' + errorPage.status);
+    }
+
+    // As paginas novas do portal de noticias precisam responder 200
+    const paginas = [
+        { rota: '/noticias.html', precisa: 'filtroCategorias' },
+        { rota: '/noticia.html', precisa: 'noticiaCorpo' },
+        { rota: '/noticia.js', precisa: null },
+        { rota: '/publicidade.html', precisa: 'Publicidade' }
+    ];
+
+    for (const pagina of paginas) {
+        const response = await request(pagina.rota);
+        if (response.status !== 200) {
+            failures.push('GET ' + pagina.rota + '  ->  ' + response.status + ' (esperava 200)');
+            continue;
+        }
+        if (pagina.precisa && response.body.indexOf(pagina.precisa) === -1) {
+            failures.push('GET ' + pagina.rota + '  ->  200 mas sem "' + pagina.precisa + '"');
+            continue;
+        }
+        results.push('GET ' + pagina.rota + '  ->  200' + (pagina.precisa ? ' (com "' + pagina.precisa + '")' : ''));
+    }
+
+    // A pagina da materia com id invalido precisa responder 200 (o
+    // aviso amigavel e montado no navegador, o id so existe no banco).
+    const materia = await request('/noticia.html?id=00000000-0000-0000-0000-000000000000');
+    if (materia.status === 200) {
+        results.push('GET /noticia.html?id=invalido  ->  200 (o aviso amigavel e montado no navegador)');
+    } else {
+        failures.push('GET /noticia.html?id=invalido  ->  ' + materia.status + ' (esperava 200)');
     }
 
     server.kill();

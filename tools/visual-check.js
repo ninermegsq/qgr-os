@@ -589,6 +589,43 @@ function auditDom() {
             .querySelectorAll('.news-card').length
     };
 
+    /* ---------- Filtro por data (a listagem abre no dia de hoje) ---------- */
+    const blocoData = document.getElementById('newsData');
+    const campoData = document.getElementById('newsDataInput');
+    const statusData = document.getElementById('newsDataStatus');
+    const botaoHoje = document.getElementById('newsDataHoje');
+    const botaoOntem = document.getElementById('newsDataOntem');
+    const navAnterior = document.getElementById('newsDataAnterior');
+    const navProximo = document.getElementById('newsDataProximo');
+
+    result.data = {
+        blocoExiste: !!blocoData,
+        blocoVisivel: blocoData ? blocoData.getBoundingClientRect().height > 0 : false,
+        inputExiste: !!campoData,
+        tipoInput: campoData ? (campoData.getAttribute('type') || '') : '',
+        dataSelecionada: campoData ? (campoData.value || '') : '',
+        maxInput: campoData ? (campoData.getAttribute('max') || '') : '',
+        statusExiste: !!statusData,
+        status: statusData ? (statusData.textContent || '').trim().slice(0, 90) : '',
+        statusVivo: statusData ? (statusData.getAttribute('aria-live') || '') : '',
+        hojeExiste: !!botaoHoje,
+        hojePressionado: botaoHoje ? botaoHoje.getAttribute('aria-pressed') === 'true' : false,
+        ontemExiste: !!botaoOntem,
+        ontemPressionado: botaoOntem ? botaoOntem.getAttribute('aria-pressed') === 'true' : false,
+        anteriorExiste: !!navAnterior,
+        anteriorDesativado: navAnterior ? !!navAnterior.disabled : false,
+        proximoExiste: !!navProximo,
+        proximoDesativado: navProximo ? !!navProximo.disabled : false,
+        urlTemData: window.location.search.indexOf('data=') !== -1,
+        canonical: (document.querySelector('link[rel="canonical"]') || { getAttribute: () => '' })
+            .getAttribute('href') || '',
+        robots: (document.querySelector('meta[name="robots"]') || { getAttribute: () => '' })
+            .getAttribute('content') || '',
+        acaoVazio: document.querySelectorAll('.news-data-acao').length,
+        cartoes: (document.getElementById('newsGrid') || { querySelectorAll: () => [] })
+            .querySelectorAll('.news-card').length
+    };
+
     /* ---------- Anuncios e selo de publicidade ---------- */
     const selos = document.querySelectorAll('.anuncio-selo');
 
@@ -668,7 +705,7 @@ function buscarNoticiaPublicada() {
 
     if (!config.url || !config.chave) return Promise.resolve(null);
 
-    const caminho = '/rest/v1/noticias?select=id,categoria&publicado=eq.true' +
+    const caminho = '/rest/v1/noticias?select=id,categoria,publicado_em&publicado=eq.true' +
         '&order=publicado_em.desc&limit=1';
 
     return new Promise(resolve => {
@@ -700,6 +737,69 @@ function buscarNoticiaPublicada() {
             requisicao.end();
         } catch (erro) {
             resolve(null);
+        }
+    });
+}
+
+/* O dia da noticia e o dia do calendario de Mato Grosso (UTC-4,
+   sem horario de verao), o mesmo criterio usado pelo script.js. */
+function diaEmMatoGrosso(iso) {
+    const carimbo = Date.parse(iso);
+    if (isNaN(carimbo)) return '';
+    return new Date(carimbo - 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/* Hoje no calendario de Mato Grosso */
+function hojeEmMatoGrosso() {
+    return new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/* Os dias (em Mato Grosso) que tem noticia publicada. Serve para
+   testar a listagem de um dia escolhido pela url. */
+function buscarDiasPublicados() {
+    const config = configuracaoSite();
+
+    if (!config.url || !config.chave) return Promise.resolve([]);
+
+    const caminho = '/rest/v1/noticias?select=publicado_em&publicado=eq.true' +
+        '&order=publicado_em.desc&limit=1000';
+
+    return new Promise(resolve => {
+        try {
+            const requisicao = https.request(config.url + caminho, {
+                method: 'GET',
+                timeout: 8000,
+                headers: {
+                    apikey: config.chave,
+                    Accept: 'application/json'
+                }
+            }, resposta => {
+                let corpo = '';
+                resposta.setEncoding('utf8');
+                resposta.on('data', parte => { corpo += parte; });
+                resposta.on('end', () => {
+                    if (resposta.statusCode !== 200) return resolve([]);
+                    try {
+                        const linhas = JSON.parse(corpo);
+                        const dias = [];
+
+                        (Array.isArray(linhas) ? linhas : []).forEach(linha => {
+                            const dia = diaEmMatoGrosso(linha.publicado_em);
+                            if (dia && dias.indexOf(dia) === -1) dias.push(dia);
+                        });
+
+                        resolve(dias);
+                    } catch (erro) {
+                        resolve([]);
+                    }
+                });
+            });
+
+            requisicao.on('error', () => resolve([]));
+            requisicao.on('timeout', () => { requisicao.destroy(); resolve([]); });
+            requisicao.end();
+        } catch (erro) {
+            resolve([]);
         }
     });
 }
@@ -1170,6 +1270,37 @@ async function main() {
     } else {
         report.notes.push('Nenhuma noticia publicada no banco: a materia e o filtro foram testados so com o aviso amigavel');
     }
+
+    /* A listagem por dia: abre com ?data= apontando para um dia que
+       tem noticia. Quando esse dia nao e o de hoje, a pagina precisa
+       ficar com "noindex" (o dia de hoje e o unico indexado). */
+    const diasPublicados = await buscarDiasPublicados();
+
+    if (diasPublicados.length) {
+        const hoje = hojeEmMatoGrosso();
+        const diaEscolhido = diasPublicados.find(dia => dia !== hoje) || diasPublicados[0];
+
+        paginas.push({
+            name: 'noticias-com-data',
+            url: '/noticias.html?data=' + encodeURIComponent(diaEscolhido),
+            esperaNoindex: diaEscolhido !== hoje
+        });
+
+        if (diaEscolhido === hoje) {
+            report.notes.push('A listagem por dia foi testada com o dia de hoje (nao ha noticia em dia anterior): o "noindex" de outro dia nao foi verificado');
+        }
+    } else {
+        report.notes.push('Nenhum dia com noticia publicada: o filtro de data so foi testado no dia de hoje');
+    }
+
+    /* Um dia que nao tem noticia: a pagina precisa avisar que nao ha
+       nada nesse dia, oferecer a volta para o dia de hoje e ficar
+       fora do indice do Google. */
+    paginas.push({
+        name: 'noticias-dia-vazio',
+        url: '/noticias.html?data=2000-01-01',
+        esperaNoindex: true
+    });
 
     for (const target of paginas) {
         report.pages[target.name] = {};
@@ -1679,6 +1810,98 @@ async function main() {
                 }
                 if (dom.filtro.chips > 0 && dom.filtro.chipsPressionados > 1) {
                     report.problems.push(label + ': mais de uma categoria marcada ao mesmo tempo');
+                }
+            }
+
+            /* O filtro por data: a listagem abre sempre no dia de hoje e
+               so muda de dia quando o leitor pede (campo de data,
+               "Hoje", "Ontem" ou as setas). */
+            if (target.name === 'noticias' || target.name === 'noticias-com-data' || target.name === 'noticias-dia-vazio') {
+                if (!dom.data.blocoExiste) {
+                    report.problems.push(label + ': bloco de data ausente (#newsData)');
+                }
+                if (!dom.data.inputExiste) {
+                    report.problems.push(label + ': campo de data ausente (#newsDataInput)');
+                } else if (dom.data.tipoInput !== 'date') {
+                    report.problems.push(label + ': o campo de data nao e do tipo "date"');
+                }
+                if (!dom.data.statusExiste) {
+                    report.problems.push(label + ': linha de status da data ausente (#newsDataStatus)');
+                } else {
+                    if (!dom.data.status) {
+                        report.problems.push(label + ': a linha de status da data ficou vazia');
+                    }
+                    if (dom.data.statusVivo !== 'polite') {
+                        report.problems.push(label + ': a linha de status da data nao avisa leitores de tela (aria-live)');
+                    }
+                }
+                if (!dom.data.hojeExiste || !dom.data.ontemExiste) {
+                    report.problems.push(label + ': faltam os botoes "Hoje" e "Ontem" do filtro de data');
+                }
+                if (!dom.data.anteriorExiste || !dom.data.proximoExiste) {
+                    report.problems.push(label + ': faltam as setas de dia anterior e do dia seguinte');
+                }
+                if (!dom.data.dataSelecionada) {
+                    report.problems.push(label + ': o filtro de data ficou sem dia selecionado');
+                }
+                if (dom.data.maxInput && dom.data.dataSelecionada && dom.data.maxInput < dom.data.dataSelecionada) {
+                    report.problems.push(label + ': o filtro de data aceitou um dia depois do limite');
+                }
+            }
+
+            /* A listagem do dia (sem parametro na url) e a listagem de um
+               dia escolhido pela url: a primeira e indexada, a segunda
+               nao (canonical na url principal e noindex). */
+            if (target.name === 'noticias-com-data') {
+                if (!dom.data.urlTemData) {
+                    report.problems.push(label + ': a url nao guardou o dia escolhido (?data=)');
+                }
+                if (target.esperaNoindex) {
+                    if (dom.data.robots.indexOf('noindex') === -1) {
+                        report.problems.push(label + ': a listagem de um dia que nao e o de hoje deveria ficar com "noindex"');
+                    }
+                } else if (dom.data.robots.indexOf('noindex') !== -1) {
+                    report.problems.push(label + ': a listagem do dia de hoje nao pode ficar com "noindex"');
+                }
+                if (dom.data.canonical.indexOf('data=') !== -1) {
+                    report.problems.push(label + ': a canonical da listagem por dia nao pode levar o parametro "data"');
+                }
+                if (!dom.data.cartoes) {
+                    report.problems.push(label + ': a listagem do dia escolhido veio sem noticia');
+                }
+            }
+
+            /* A listagem do dia de hoje (sem parametro na url) e a unica
+               indexada: o Google deve guardar a pagina principal. */
+            if (target.name === 'noticias') {
+                if (dom.data.robots.indexOf('noindex') !== -1) {
+                    report.problems.push(label + ': a listagem do dia de hoje ficou com "noindex"');
+                }
+                if (dom.data.canonical.indexOf('data=') !== -1) {
+                    report.problems.push(label + ': a canonical da listagem do dia de hoje nao pode levar o parametro "data"');
+                }
+            }
+
+            /* Um dia sem noticia: o leitor precisa entender que nao ha
+               nada nesse dia e ter um caminho de volta para o de hoje. */
+            if (target.name === 'noticias-dia-vazio') {
+                if (dom.data.cartoes) {
+                    report.problems.push(label + ': a listagem de um dia sem noticia trouxe ' + dom.data.cartoes + ' card(s)');
+                }
+                if (!dom.news.emptyMessage) {
+                    report.problems.push(label + ': a listagem de um dia sem noticia nao avisou que nao ha nada naquele dia');
+                }
+                if (!dom.data.acaoVazio) {
+                    report.problems.push(label + ': a listagem de um dia sem noticia nao ofereceu a volta para o dia de hoje');
+                }
+                if (dom.data.robots.indexOf('noindex') === -1) {
+                    report.problems.push(label + ': a listagem de um dia que nao e o de hoje deveria ficar com "noindex"');
+                }
+                if (dom.data.canonical.indexOf('data=') !== -1) {
+                    report.problems.push(label + ': a canonical da listagem por dia nao pode levar o parametro "data"');
+                }
+                if (dom.data.status.indexOf('nenhuma') === -1) {
+                    report.problems.push(label + ': a linha de status nao avisou que o dia nao tem noticia');
                 }
             }
 

@@ -804,6 +804,36 @@ if (!/or=\(/.test(js) || !/categoria\.eq\./.test(js)) {
     errors.push('script.js sem o filtro de varias categorias (or=(categoria.eq....))');
 }
 
+/* Pilar 4: a listagem abre no dia de hoje e o leitor troca a data */
+const noticiasHtml2 = read('noticias.html');
+
+if (!/id="newsData"/.test(noticiasHtml2)) {
+    errors.push('noticias.html sem o bloco de data #newsData');
+}
+if (!/id="newsDataInput"/.test(noticiasHtml2)) {
+    errors.push('noticias.html sem o campo de data #newsDataInput');
+}
+if (!/id="newsDataStatus"/.test(noticiasHtml2)) {
+    errors.push('noticias.html sem a linha de status do dia #newsDataStatus');
+}
+if (!/type="date"/.test(noticiasHtml2)) {
+    errors.push('noticias.html sem o campo de escolha de data (input type="date")');
+}
+
+/* O filtro de data vira um intervalo de tempo na consulta: os dois
+   limites precisam estar no codigo (publicado_em=gte. e publicado_em=lt.) */
+if (!/publicado_em=gte\./.test(js) || !/publicado_em=lt\./.test(js)) {
+    errors.push('script.js sem o filtro de data na consulta (publicado_em=gte./lt.)');
+}
+
+/* O dia escolhido fica no endereco e a listagem volta para o dia de hoje */
+if (!/parametros\.set\('data'/.test(js)) {
+    errors.push('script.js sem gravar o dia escolhido na URL (parametros.set("data"))');
+}
+if (!/dataSelecionada\s*=\s*lerDataDaUrl\(\)/.test(js)) {
+    errors.push('script.js sem ler o dia escolhido da URL (dataSelecionada = lerDataDaUrl())');
+}
+
 /* O painel tem a aba de anuncios */
 if (!/data-tab="anuncios"/.test(adminHtml)) {
     errors.push('admin/index.html sem a aba de Anuncios');
@@ -864,6 +894,7 @@ HTML_FILES.forEach(file => {
 });
 
 notes.push('Portal de noticias: materia hospedada, anuncios com selo e filtro por categoria conferidos');
+notes.push('Listagem por dia: bloco de data na pagina de noticias e filtro por intervalo no banco conferidos');
 notes.push('Metricas da materia conferidas: visualizacoes (RPC) e clique (classe do card)');
 
 /* ---------- 26. Rotacao de anuncios (rodizio real) ---------- */

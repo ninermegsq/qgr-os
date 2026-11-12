@@ -1625,6 +1625,148 @@ footer {
 }
 
 /* ==================================================================
+ * Filtro por data (a listagem abre no dia de hoje)
+ * ==================================================================
+ * A página de notícias mostra o que saiu hoje. Para ver outro dia o
+ * leitor troca a data: o campo abre o seletor do próprio celular e os
+ * botões ‹ › pulam para o dia vizinho que tem publicação.
+ * ================================================================== */
+
+.news-data {
+    margin-bottom: 28px;
+    padding: 16px 20px;
+    background: var(--bg-gray);
+    border: 1px solid rgba(15, 61, 46, 0.12);
+    border-radius: 14px;
+}
+
+.news-data-linha {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 18px;
+}
+
+.news-data-rotulo {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold-text);
+}
+
+.news-data-controle {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.news-data-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid rgba(15, 61, 46, 0.18);
+    border-radius: 50%;
+    background: var(--bg-light);
+    color: var(--primary-color);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.news-data-nav .ic {
+    width: 18px;
+    height: 18px;
+}
+
+.news-data-nav:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.news-data-nav:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.news-data-input {
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    padding: 8px 12px;
+    min-height: 38px;
+    border: 1px solid rgba(15, 61, 46, 0.18);
+    border-radius: 10px;
+    background: var(--bg-light);
+    cursor: pointer;
+}
+
+.news-data-chip {
+    padding: 8px 16px;
+    border: 1px solid rgba(15, 61, 46, 0.18);
+    border-radius: 50px;
+    background: var(--bg-light);
+    color: var(--primary-color);
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.news-data-chip:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.news-data-chip[aria-pressed="true"] {
+    background: var(--gradient-green);
+    color: var(--text-light);
+    border-color: transparent;
+    box-shadow: var(--shadow-sm);
+}
+
+.news-data-chip:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.news-data-status {
+    margin: 12px 0 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+/* Botão do estado vazio ("ver as de ontem" / "voltar para hoje") */
+.news-data-acao {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 16px;
+    padding: 12px 22px;
+    border: none;
+    border-radius: 50px;
+    background: var(--gradient-gold);
+    color: var(--primary-color);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.news-data-acao:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ==================================================================
  * Anúncios (espaços patrocinados)
  * ==================================================================
  * Todo anúncio tem selo visível de "Publicidade", link com
@@ -2190,6 +2332,27 @@ footer {
 
     .filtro-chip {
         flex: 0 0 auto;
+    }
+
+    /* No celular o bloco de data empilha: o controle fica embaixo */
+    .news-data {
+        padding: 14px 16px;
+        margin-bottom: 24px;
+    }
+
+    .news-data-linha {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .news-data-controle {
+        width: 100%;
+    }
+
+    .news-data-input {
+        flex: 1 1 auto;
+        min-width: 0;
     }
 
     .noticia-capa img {

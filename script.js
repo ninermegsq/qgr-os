@@ -1039,7 +1039,7 @@ function limparElemento(elemento) {
     while (elemento.firstChild) elemento.removeChild(elemento.firstChild);
 }
 
-function mostrarAvisoNoticias(texto) {
+function mostrarAvisoNoticias(texto, acao) {
     const grade = document.getElementById('newsGrid');
     if (!grade) return;
 
@@ -1050,6 +1050,20 @@ function mostrarAvisoNoticias(texto) {
     aviso.textContent = texto;
 
     grade.appendChild(aviso);
+
+    /* Botão de ajuda: "ver as de ontem" ou "voltar para as de hoje" */
+    if (acao && acao.texto) {
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'news-data-acao';
+        botao.textContent = acao.texto;
+
+        if (typeof acao.clique === 'function') {
+            botao.addEventListener('click', acao.clique);
+        }
+
+        grade.appendChild(botao);
+    }
 }
 
 /* ------------------------------------------------------------------
@@ -1160,7 +1174,7 @@ function carregarNoticias(acrescentar) {
             }
 
             if (!lista.length) {
-                if (!continuar) mostrarAvisoNoticias(mensagemSemResultados());
+                if (!continuar) mostrarAvisoNoticias(mensagemSemResultados(), acaoDoEstadoVazio());
             } else {
                 lista.forEach((noticia, indice) => {
                     grade.appendChild(criarCardNoticia(noticia));
@@ -1265,7 +1279,9 @@ function escreverCategoriasNaUrl() {
 /* Canonical e robots conforme o filtro escolhido.
    - Sem filtro: a página é a listagem geral.
    - Com filtro: o canonical aponta para a própria combinação.
-   - Combinação sem notícia: noindex e volta para a listagem geral. */
+   - Combinação sem notícia: noindex e volta para a listagem geral.
+   - Dia diferente do de hoje: o canonical continua sendo a listagem e a
+     página fica noindex (o conteúdo é o mesmo, só muda a data). */
 function atualizarSeoNoticias(temResultados) {
     const canonical = document.querySelector('link[rel="canonical"]');
     const robots = document.querySelector('meta[name="robots"]');
@@ -1276,9 +1292,12 @@ function atualizarSeoNoticias(temResultados) {
         : base;
 
     const semResultado = categoriasSelecionadas.length > 0 && !temResultados;
+    const outroDia = (dataSelecionada || hojeEmQg()) !== hojeEmQg();
 
-    if (canonical) canonical.setAttribute('href', semResultado ? base : filtrada);
-    if (robots) robots.setAttribute('content', semResultado ? 'noindex, follow' : 'index, follow');
+    const semIndexar = semResultado || outroDia;
+
+    if (canonical) canonical.setAttribute('href', semIndexar ? base : filtrada);
+    if (robots) robots.setAttribute('content', semIndexar ? 'noindex, follow' : 'index, follow');
 }
 
 /* Monta a consulta do banco conforme as categorias escolhidas */
@@ -1286,6 +1305,13 @@ function montarConsultaNoticias(continuar) {
     const campos = 'id,titulo,resumo,categoria,fonte,url,imagem_url,publicado_em,destaque';
 
     let consulta = 'select=' + campos + '&publicado=eq.true';
+
+    /* Só o dia escolhido: a listagem abre no dia de hoje e só muda
+       quando o leitor troca a data (publicado_em de ... até ...). */
+    const dia = dataSelecionada || hojeEmQg();
+
+    consulta += '&publicado_em=gte.' + encodeURIComponent(inicioDoDia(dia));
+    consulta += '&publicado_em=lt.' + encodeURIComponent(fimDoDia(dia));
 
     if (categoriasSelecionadas.length) {
         const lista = categoriasSelecionadas
@@ -1309,25 +1335,41 @@ function montarConsultaNoticias(continuar) {
 
 /* Mensagem para quando não há nada no filtro escolhido */
 function mensagemSemResultados() {
-    if (!categoriasSelecionadas.length) {
-        return 'Nenhuma notícia publicada no momento.';
-    }
+    const hoje = hojeEmQg();
+    const dia = dataSelecionada || hoje;
 
     const rotulos = categoriasSelecionadas.map(valor => ROTULO_CATEGORIA[valor] || valor);
 
+    let filtro = '';
+
     if (rotulos.length === 1) {
-        return 'Nenhuma notícia publicada em "' + rotulos[0] + '" no momento.';
+        filtro = ' em "' + rotulos[0] + '"';
+    } else if (rotulos.length > 1) {
+        filtro = ' nas categorias "' + rotulos.join('", "') + '"';
     }
 
-    return 'Nenhuma notícia publicada em "' + rotulos.join('", "') + '" no momento.';
+    if (dia === hoje) {
+        return 'Ainda não publicamos notícia hoje (' + formatarDataQg(dia) + ')' + filtro + '.';
+    }
+
+    return 'Não publicamos notícias em ' + formatarDataQg(dia) + filtro + '.';
 }
 
 /* Conta quantas notícias publicadas existem em cada categoria.
-   Uma consulta leve: do banco vem só o campo categoria. */
+   Uma consulta leve: do banco vem só o campo categoria.
+   A contagem é do dia escolhido — os números dos chips precisam
+   falar do que está na tela. */
 function carregarContagemCategorias() {
     if (!SUPABASE_ATIVO) return Promise.resolve({});
 
-    return SUPABASE.select('noticias', 'select=categoria&publicado=eq.true&limit=1000')
+    const dia = dataSelecionada || hojeEmQg();
+
+    const consulta = 'select=categoria&publicado=eq.true' +
+        '&publicado_em=gte.' + encodeURIComponent(inicioDoDia(dia)) +
+        '&publicado_em=lt.' + encodeURIComponent(fimDoDia(dia)) +
+        '&limit=1000';
+
+    return SUPABASE.select('noticias', consulta)
         .then(linhas => {
             const lista = Array.isArray(linhas) ? linhas : [];
             const contagem = {};
@@ -1368,15 +1410,22 @@ function criarChipCategoria(valor, total, selecionado) {
 /* Desenha os chips com a contagem de cada categoria */
 function montarChipsCategorias() {
     const caixa = document.getElementById('filtroChips');
-    if (!caixa) return;
-
-    limparElemento(caixa);
 
     let totalGeral = 0;
 
     Object.keys(contagemCategorias).forEach(chave => {
         totalGeral += contagemCategorias[chave];
     });
+
+    /* Quantas notícias foram publicadas no dia escolhido: é o número
+       que a linha de status do bloco de data mostra. */
+    noticiasDoDia = totalGeral;
+
+    atualizarBlocoData();
+
+    if (!caixa) return;
+
+    limparElemento(caixa);
 
     caixa.appendChild(criarChipCategoria(
         CATEGORIA_TODAS,
@@ -1457,6 +1506,331 @@ function prepararFiltroCategorias() {
 
         chips[proximo].focus();
     });
+}
+
+/* ------------------------------------------------------------------
+ * Filtro por data (a listagem abre sempre no dia de hoje)
+ * ------------------------------------------------------------------
+ * A página de notícias mostra o que saiu HOJE, no fuso de Mato Grosso
+ * (UTC-4, sem horário de verão). Para ver outro dia o leitor troca a
+ * data: o filtro vira um intervalo de tempo na consulta (publicado_em
+ * de ... até ...). A escolha fica no endereço (?data=AAAA-MM-DD) e
+ * NÃO é guardada no navegador: quem entra de novo vê o dia de hoje.
+ * ------------------------------------------------------------------ */
+
+/* Deslocamento fixo de Mato Grosso em relação ao UTC (em ms) */
+const FUSO_QG = -4 * 60 * 60 * 1000;
+
+/* Dia escolhido pelo leitor (vazio = hoje) */
+let dataSelecionada = '';
+
+/* Dias que têm notícia publicada (para pular de um dia para o outro) */
+let diasComNoticia = [];
+
+/* Quantas notícias foram publicadas no dia escolhido */
+let noticiasDoDia = 0;
+
+/* Data (AAAA-MM-DD) de um instante, no fuso de Mato Grosso */
+function chaveDiaQg(iso) {
+    const data = new Date(iso);
+    if (isNaN(data.getTime())) return '';
+
+    return new Date(data.getTime() + FUSO_QG).toISOString().slice(0, 10);
+}
+
+/* O dia de hoje, no fuso de Mato Grosso */
+function hojeEmQg() {
+    return new Date(Date.now() + FUSO_QG).toISOString().slice(0, 10);
+}
+
+/* Soma (ou subtrai) dias de uma data AAAA-MM-DD */
+function somarDias(chave, dias) {
+    const partes = String(chave || '').split('-');
+    if (partes.length !== 3) return '';
+
+    const data = new Date(
+        Number(partes[0]),
+        Number(partes[1]) - 1,
+        Number(partes[2]) + dias,
+        12, 0, 0, 0
+    );
+
+    if (isNaN(data.getTime())) return '';
+
+    return data.getFullYear() + '-' +
+        String(data.getMonth() + 1).padStart(2, '0') + '-' +
+        String(data.getDate()).padStart(2, '0');
+}
+
+/* A data existe mesmo? (13/13/2026 não existe) */
+function chaveDataValida(valor) {
+    const texto = String(valor || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return '';
+
+    const partes = texto.split('-').map(Number);
+    const data = new Date(partes[0], partes[1] - 1, partes[2], 12);
+
+    if (isNaN(data.getTime())) return '';
+    if (data.getFullYear() !== partes[0]) return '';
+    if (data.getMonth() + 1 !== partes[1]) return '';
+    if (data.getDate() !== partes[2]) return '';
+
+    return texto;
+}
+
+/* Início do dia em ISO, com o fuso de Mato Grosso */
+function inicioDoDia(chave) {
+    return chave + 'T00:00:00-04:00';
+}
+
+/* Fim do dia (o começo do dia seguinte) em ISO */
+function fimDoDia(chave) {
+    const proximo = somarDias(chave, 1);
+    return (proximo || chave) + 'T00:00:00-04:00';
+}
+
+/* Data no formato do Brasil (DD/MM/AAAA) */
+function formatarDataQg(chave) {
+    const partes = String(chave || '').split('-');
+    if (partes.length !== 3) return '';
+
+    return partes[2] + '/' + partes[1] + '/' + partes[0];
+}
+
+/* Como chamar o dia escolhido: "hoje", "ontem" ou nada (quando o dia
+   é outro qualquer, o próprio nome da data faz o papel do rótulo) */
+function rotuloDoDia(chave) {
+    const hoje = hojeEmQg();
+
+    if (chave === hoje) return 'hoje';
+    if (chave === somarDias(hoje, -1)) return 'ontem';
+
+    return '';
+}
+
+/* O dia que o leitor pediu no endereço (?data=AAAA-MM-DD) */
+function lerDataDaUrl() {
+    const parametros = new URLSearchParams(window.location.search);
+    const bruto = parametros.get('data') || '';
+
+    let valor = bruto;
+
+    try {
+        valor = decodeURIComponent(bruto);
+    } catch (erro) {
+        valor = bruto;
+    }
+
+    const chave = chaveDataValida(valor);
+    const hoje = hojeEmQg();
+
+    /* Data inválida ou no futuro: a página abre no dia de hoje */
+    if (!chave || chave > hoje) return hoje;
+
+    return chave;
+}
+
+/* Grava o dia escolhido no endereço (sem poluir o histórico) */
+function escreverDataNaUrl() {
+    const parametros = new URLSearchParams(window.location.search);
+    const hoje = hojeEmQg();
+
+    if (dataSelecionada && dataSelecionada !== hoje) {
+        parametros.set('data', dataSelecionada);
+    } else {
+        parametros.delete('data');
+    }
+
+    const consulta = parametros.toString();
+    const novaUrl = window.location.pathname +
+        (consulta ? '?' + consulta : '') +
+        window.location.hash;
+
+    window.history.replaceState(null, '', novaUrl);
+}
+
+/* Carrega os dias que têm notícia (o botão ‹ › pula o dia vazio) */
+function carregarDiasComNoticia() {
+    if (!SUPABASE_ATIVO) return Promise.resolve([]);
+
+    return SUPABASE.select('noticias',
+        'select=publicado_em&publicado=eq.true&order=publicado_em.desc&limit=1000')
+        .then(linhas => {
+            const lista = Array.isArray(linhas) ? linhas : [];
+            const dias = [];
+
+            lista.forEach(linha => {
+                const chave = chaveDiaQg(linha && linha.publicado_em);
+                if (chave && dias.indexOf(chave) === -1) dias.push(chave);
+            });
+
+            dias.sort();
+            diasComNoticia = dias;
+
+            return dias;
+        })
+        .catch(erro => {
+            console.warn('Q GRAOS: não foi possível carregar os dias com notícia.', erro && erro.message);
+            return [];
+        });
+}
+
+/* O dia vizinho que tem notícia (-1 = anterior, 1 = seguinte) */
+function diaComNoticiaNoSentido(sentido) {
+    const dia = dataSelecionada || hojeEmQg();
+
+    if (sentido < 0) {
+        for (let i = diasComNoticia.length - 1; i >= 0; i--) {
+            if (diasComNoticia[i] < dia) return diasComNoticia[i];
+        }
+
+        return '';
+    }
+
+    for (let i = 0; i < diasComNoticia.length; i++) {
+        if (diasComNoticia[i] > dia) return diasComNoticia[i];
+    }
+
+    return '';
+}
+
+/* Atualiza o bloco de data: campo, botões e linha de status */
+function atualizarBlocoData() {
+    const bloco = document.getElementById('newsData');
+    if (!bloco) return;
+
+    const hoje = hojeEmQg();
+    const dia = dataSelecionada || hoje;
+    const ontem = somarDias(hoje, -1);
+
+    const campo = document.getElementById('newsDataInput');
+    const botaoHoje = document.getElementById('newsDataHoje');
+    const botaoOntem = document.getElementById('newsDataOntem');
+    const anterior = document.getElementById('newsDataAnterior');
+    const proximo = document.getElementById('newsDataProximo');
+    const status = document.getElementById('newsDataStatus');
+
+    if (campo) {
+        campo.value = dia;
+        /* Não dá para escolher um dia que ainda vai acontecer */
+        campo.max = hoje;
+    }
+
+    if (botaoHoje) {
+        botaoHoje.setAttribute('aria-pressed', dia === hoje ? 'true' : 'false');
+    }
+
+    if (botaoOntem) {
+        botaoOntem.setAttribute('aria-pressed', dia === ontem ? 'true' : 'false');
+        botaoOntem.disabled = diasComNoticia.indexOf(ontem) === -1;
+    }
+
+    if (anterior) anterior.disabled = !diaComNoticiaNoSentido(-1);
+    if (proximo) proximo.disabled = !diaComNoticiaNoSentido(1);
+
+    if (status) {
+        const quantidade = noticiasDoDia === 1
+            ? '1 notícia'
+            : noticiasDoDia + ' notícias';
+
+        /* "Notícias de hoje, 11/11/2026" ou "Notícias de 01/01/2000" */
+        const rotulo = rotuloDoDia(dia);
+        const quando = rotulo
+            ? rotulo + ', ' + formatarDataQg(dia)
+            : formatarDataQg(dia);
+
+        status.textContent = 'Notícias de ' + quando + ' · ' +
+            (noticiasDoDia ? quantidade : 'nenhuma notícia');
+    }
+}
+
+/* Troca o dia mostrado e recarrega a lista do dia */
+function irParaDia(chave) {
+    const nova = chaveDataValida(chave);
+    if (!nova) return;
+
+    dataSelecionada = nova;
+
+    escreverDataNaUrl();
+
+    /* O painel registra que o leitor trocou o dia (a URL fica no evento) */
+    registrarEvento('secao', { secao: 'noticias_data' });
+
+    /* A paginação volta ao começo: "carregar mais" nunca mistura dias */
+    noticiasCarregadas = 0;
+    noticiasVisiveis = 0;
+
+    carregarContagemCategorias()
+        .then(() => {
+            montarChipsCategorias();
+            return carregarNoticias(false);
+        });
+}
+
+/* Botão do estado vazio: ajuda o leitor a sair do dia sem notícia */
+function acaoDoEstadoVazio() {
+    const hoje = hojeEmQg();
+    const dia = dataSelecionada || hoje;
+
+    if (dia !== hoje) {
+        return {
+            texto: 'Voltar para as de hoje',
+            clique: function () { irParaDia(hoje); }
+        };
+    }
+
+    const ontem = somarDias(hoje, -1);
+
+    if (diasComNoticia.indexOf(ontem) !== -1) {
+        return {
+            texto: 'Ver as de ontem',
+            clique: function () { irParaDia(ontem); }
+        };
+    }
+
+    return null;
+}
+
+/* Liga o bloco de data: campo, atalhos e navegação entre os dias */
+function prepararFiltroData() {
+    const bloco = document.getElementById('newsData');
+    if (!bloco) return;
+
+    const campo = document.getElementById('newsDataInput');
+    const botaoHoje = document.getElementById('newsDataHoje');
+    const botaoOntem = document.getElementById('newsDataOntem');
+    const anterior = document.getElementById('newsDataAnterior');
+    const proximo = document.getElementById('newsDataProximo');
+
+    if (campo) {
+        campo.addEventListener('change', function () {
+            irParaDia(campo.value);
+        });
+    }
+
+    if (botaoHoje) {
+        botaoHoje.addEventListener('click', function () {
+            irParaDia(hojeEmQg());
+        });
+    }
+
+    if (botaoOntem) {
+        botaoOntem.addEventListener('click', function () {
+            irParaDia(somarDias(hojeEmQg(), -1));
+        });
+    }
+
+    if (anterior) {
+        anterior.addEventListener('click', function () {
+            irParaDia(diaComNoticiaNoSentido(-1));
+        });
+    }
+
+    if (proximo) {
+        proximo.addEventListener('click', function () {
+            irParaDia(diaComNoticiaNoSentido(1));
+        });
+    }
 }
 
 /* ------------------------------------------------------------------
@@ -1921,6 +2295,7 @@ observarSecoes();
 observarCliques();
 prepararBotaoMaisNoticias();
 prepararFiltroCategorias();
+prepararFiltroData();
 
 /* A ficha de contato sabe de onde veio o visitante: quando ele chega
    da página de uma matéria, a opção de busca vem marcada e a origem
@@ -1933,8 +2308,14 @@ prepararAncoraContato();
 if (document.getElementById('newsGrid')) {
     categoriasSelecionadas = lerCategoriasDaUrl();
 
-    /* Primeiro os anúncios elegíveis e a contagem por categoria; depois a lista */
+    /* A listagem abre no dia de hoje (ou no dia que o leitor pediu
+       na URL). A escolha não fica guardada no navegador. */
+    dataSelecionada = lerDataDaUrl();
+
+    /* Primeiro os anúncios elegíveis, os dias com notícia e a contagem
+       por categoria; depois a lista do dia escolhido */
     QGAnuncios.iniciar('noticias')
+        .then(() => carregarDiasComNoticia())
         .then(() => carregarContagemCategorias())
         .then(() => {
             montarChipsCategorias();

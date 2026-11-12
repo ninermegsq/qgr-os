@@ -22,6 +22,8 @@
  *                                          -> o filtro de categoria funciona
  *  12. POST /rest/v1/rpc/registrar_visualizacao_noticia -> conta a
  *                                          visualizacao da materia
+ *  13. GET  /rest/v1/noticias com publicado_em=gte./lt. -> o filtro de
+ *                                          data (a listagem abre no dia)
  *
  * O lead de teste usa o e-mail TESTE@QGRAOS.INVALID (domínio reservado
  * pela RFC 2606, impossível de existir) e é removido no final.
@@ -122,6 +124,14 @@ function conferir(descricao, condicao, detalhe) {
 function bloqueado(resposta) {
     // PostgREST nega com 401 (sem papel) ou 403 (sem política) ou 404
     return [401, 403, 404].indexOf(resposta.status) !== -1;
+}
+
+/* O dia seguinte de uma data AAAA-MM-DD */
+function diaSeguinte(dia) {
+    const data = new Date(dia + 'T12:00:00Z');
+    data.setUTCDate(data.getUTCDate() + 1);
+
+    return data.toISOString().slice(0, 10);
 }
 
 /* Uma tabela protegida pode responder de duas formas e as duas sao
@@ -349,6 +359,66 @@ async function principal() {
     conferir('Filtro por multiplas categorias responde 200', filtro.status === 200, 'HTTP ' + filtro.status);
     conferir('Filtro por multiplas categorias devolve lista', Array.isArray(filtro.dados),
         Array.isArray(filtro.dados) ? filtro.dados.length + ' noticia(s)' : 'nao e lista');
+
+    /* 7d. Filtro por data (a listagem abre no dia escolhido) -------- */
+    /* A consulta do site usa dois limites na mesma coluna:
+       publicado_em=gte.<dia>T00:00:00-04:00 e
+       publicado_em=lt.<dia+1>T00:00:00-04:00. Aqui conferimos que os
+       dois limites valem de verdade (e nao so o ultimo). */
+    const comData = await chamar(
+        'GET',
+        '/rest/v1/noticias?select=id,publicado_em&publicado=eq.true&order=publicado_em.desc&limit=1'
+    );
+
+    const primeira = Array.isArray(comData.dados) && comData.dados.length
+        ? comData.dados[0]
+        : null;
+
+    if (primeira && primeira.publicado_em) {
+        const dia = String(primeira.publicado_em).slice(0, 10);
+        const seguinte = diaSeguinte(dia);
+
+        const noDia = await chamar(
+            'GET',
+            '/rest/v1/noticias?select=id&publicado=eq.true' +
+            '&publicado_em=gte.' + encodeURIComponent(dia + 'T00:00:00-04:00') +
+            '&publicado_em=lt.' + encodeURIComponent(seguinte + 'T00:00:00-04:00') +
+            '&limit=50'
+        );
+
+        conferir('Filtro por data devolve as noticias do dia escolhido',
+            noDia.status === 200 && Array.isArray(noDia.dados) && noDia.dados.length > 0,
+            'HTTP ' + noDia.status + ', ' + (Array.isArray(noDia.dados) ? noDia.dados.length + ' noticia(s)' : 'sem lista') +
+            ' em ' + dia);
+
+        /* Intervalo antigo: os dois limites tem de valer */
+        const antes = await chamar(
+            'GET',
+            '/rest/v1/noticias?select=id&publicado=eq.true' +
+            '&publicado_em=gte.' + encodeURIComponent('2000-01-01T00:00:00-04:00') +
+            '&publicado_em=lt.' + encodeURIComponent('2000-01-02T00:00:00-04:00') +
+            '&limit=50'
+        );
+
+        conferir('Filtro por data esconde o que nao e do dia (limite antigo)',
+            antes.status === 200 && Array.isArray(antes.dados) && antes.dados.length === 0,
+            'HTTP ' + antes.status + ', ' + (Array.isArray(antes.dados) ? antes.dados.length + ' noticia(s)' : 'sem lista'));
+
+        /* Intervalo futuro: prova que o limite de baixo tambem vale */
+        const depois = await chamar(
+            'GET',
+            '/rest/v1/noticias?select=id&publicado=eq.true' +
+            '&publicado_em=gte.' + encodeURIComponent('2030-01-01T00:00:00-04:00') +
+            '&publicado_em=lt.' + encodeURIComponent('2100-01-01T00:00:00-04:00') +
+            '&limit=50'
+        );
+
+        conferir('Filtro por data esconde o que e posterior ao dia (limite futuro)',
+            depois.status === 200 && Array.isArray(depois.dados) && depois.dados.length === 0,
+            'HTTP ' + depois.status + ', ' + (Array.isArray(depois.dados) ? depois.dados.length + ' noticia(s)' : 'sem lista'));
+    } else {
+        conferir('Filtro por data (nao ha noticia publicada no banco para testar)', true, 'sem noticia no banco');
+    }
 
     /* 8. Validacao: e-mail invalido tem de ser recusado --------------- */
     const invalido = await chamar('POST', '/rest/v1/rpc/registrar_lead', {

@@ -3,7 +3,7 @@
 Site estático (HTML + CSS + JavaScript puro) da **Q GRÃOS – Corretora de Grãos** (Mato Grosso, BR).
 Não usa framework, não usa CDN e não precisa de build: o site funciona **offline**, direto do disco.
 
-O **portal de notícias** (matéria hospedada no site, filtro por categoria e espaços
+O **portal de notícias** (matéria hospedada no site, filtro por dia e por categoria e espaços
 patrocinados) está descrito em [O portal de notícias](#o-portal-de-notícias).
 
 ## Como abrir
@@ -72,6 +72,9 @@ Roda `node --check` no JavaScript e o verificador `tools/verify.js`, que confere
   container `#noticiaCorpo`, estado de erro `#noticiaErro`, JSON-LD `NewsArticle`), os anúncios
   com selo de "Publicidade", `rel="sponsored nofollow noopener"` e a política `publicidade.html`,
   e o filtro de categoria com multi-seleção (`?categoria=Soja,Milho`);
+- **listagem por dia**: o bloco de data da página de notícias (`#newsData`, `#newsDataInput`,
+  `#newsDataStatus`) e o filtro por intervalo no banco (`publicado_em=gte…&publicado_em=lt…`),
+  com a data no endereço (`?data=AAAA-MM-DD`);
 - **bloco de contato da matéria**: o bloco compacto `#leadMateria` ("O que você busca hoje?")
   com o botão dourado para a ficha de contato (`index.html#contact`);
 - **métricas da matéria**: a coluna `visualizacoes` com a RPC `registrar_visualizacao_noticia`,
@@ -109,7 +112,8 @@ recusa envio repetido e o e-mail inválido é barrado; os anúncios publicados s
 público e a chave anônima **não** consegue inserir um anúncio; a chave anônima **não** consegue
 ler as cotas do anúncio nem a view de desempenho (são dados do painel), mas o painel lê as duas
 coisas; o filtro com várias categorias (`or=(categoria.eq.Soja,categoria.eq.Milho)`) funciona;
-o login do administrador funciona; e o painel publica uma notícia e um anúncio, que aparecem no
+o **filtro por dia** devolve só as notícias do dia escolhido (e esconde o que é de antes ou de
+depois dele); o login do administrador funciona; e o painel publica uma notícia e um anúncio, que aparecem no
 feed público, e depois os apaga.
 
 Para ele entrar no painel, informe a credencial por variável de ambiente
@@ -134,7 +138,8 @@ npm run visual
 ```
 
 O que ele verifica, em `/`, `/noticias.html`, `/noticia.html?id=…`, `/noticias.html?categoria=…`,
-`/publicidade.html`, `/404.html` e `/admin/`, nos tamanhos **1440×900**, **390×844** e **360×740**:
+`/noticias.html?data=…` (um dia com notícia e um dia sem notícia), `/publicidade.html`,
+`/404.html` e `/admin/`, nos tamanhos **1440×900**, **390×844** e **360×740**:
 
 - erros de console, exceções da página, requisições falhas e respostas HTTP ≥ 400;
 - rolagem horizontal (conteúdo mais largo que a tela) e elementos fora da viewport;
@@ -150,6 +155,11 @@ O que ele verifica, em `/`, `/noticias.html`, `/noticia.html?id=…`, `/noticias
 - envio do formulário gerando o link correto do WhatsApp (com o consentimento marcado);
 - a home **sem** grade de notícias (só o convite) e a página `/noticias.html` com a grade
   carregada e o botão "carregar mais"; a **ausência do botão de WhatsApp** na navegação;
+- **a listagem por dia**: a página de notícias abre no dia de hoje (campo de data preenchido,
+  botão "Hoje" marcado, linha de status com o número de notícias do dia, `aria-live` na linha
+  de status); um dia escolhido pela URL aparece no endereço, com `noindex` e o `canonical` da
+  página principal; e um dia sem notícia avisa que não há nada naquele dia, oferece a volta
+  para o dia de hoje e não mostra nenhum card;
 - **a matéria hospedada**: `/noticia.html?id=…` mostra o texto completo, o JSON-LD
   `NewsArticle`, o crédito da fonte e o bloco "Mais notícias"; a página com filtro mostra os
   chips marcados, a categoria na URL e o `canonical` da combinação;
@@ -197,7 +207,7 @@ npm run sitemap
 | Arquivo | Função |
 | --- | --- |
 | `index.html` | Página principal (sobre, serviços, produtos, contato) + sprite de ícones SVG inline + SEO (OG/JSON-LD) |
-| `noticias.html` | **Página exclusiva das notícias** do agronegócio (grade, filtro por categoria, "carregar mais" e SEO próprio) |
+| `noticias.html` | **Página exclusiva das notícias** do agronegócio (grade, **filtro por dia (lista abre no dia de hoje)**, filtro por categoria, "carregar mais" e SEO próprio) |
 | `noticia.html` | **Página da matéria**: o texto completo da notícia, hospedado no site (o visitante nunca é levado para fora), com SEO próprio (canonical, Open Graph, JSON-LD `NewsArticle`), crédito da fonte, **bloco compacto "O que você busca hoje?" com botão para a ficha de contato**, espaço patrocinado no fim e "Mais notícias" |
 | `noticia.js` | Carrega a matéria do banco e escreve na tela com `textContent` (nunca `innerHTML`), monta o SEO, conta a visualização, carrega o anúncio do fim e monta o link do botão de lead (escolha + contexto da matéria) |
 | `publicidade.html` | Política de transparência dos anúncios: o que é anúncio, o que a Q GRÃOS não endossa, autorização do anunciante, links `sponsored`, contadores e LGPD |
@@ -231,7 +241,7 @@ npm run sitemap
 | Página | Endereço | O que tem |
 | --- | --- | --- |
 | Home | `/` (`index.html`) | Hero, sobre, serviços, produtos, **convite para as notícias** e contato |
-| Notícias | `/noticias.html` | **A lista de notícias do agronegócio** (página própria, com SEO próprio), filtro de categoria e espaços patrocinados |
+| Notícias | `/noticias.html` | **A lista de notícias do agronegócio** (página própria, com SEO próprio), **filtro por dia (abre no dia de hoje)**, filtro de categoria e espaços patrocinados |
 | Matéria | `/noticia.html?id=…` | **A notícia inteira, hospedada no site**: texto completo, crédito da fonte, compartilhamento, **bloco "O que você busca hoje?" + botão para a ficha**, anúncio no fim e "Mais notícias" |
 | Publicidade | `/publicidade.html` | Política de transparência dos anúncios (como anunciar, o que a Q GRÃOS não endossa, LGPD) |
 | Erro 404 | `/404.html` | Página de erro com links para as seções e para as notícias |
@@ -251,6 +261,10 @@ As notícias carregam do Supabase com paginação real (`limit`/`offset` na API 
 a página mostra 9 por vez e o botão **“Carregar mais notícias”** aparece só quando ainda
 há resultado — ao terminar, ele some sozinho.
 
+A listagem **abre no dia de hoje** (no fuso de Mato Grosso): para ver outro dia, o leitor
+usa o campo de data, os atalhos “Hoje”/“Ontem” ou as setas — e a escolha fica na URL
+(`?data=AAAA-MM-DD`), sem ficar guardada no navegador.
+
 ## O portal de notícias
 
 **1. A matéria fica hospedada aqui.** O card da listagem abre `noticia.html?id=…` e o texto
@@ -264,7 +278,29 @@ Milho, Safra… e podem ser marcados **vários ao mesmo tempo** (`?categoria=Soj
 escolha fica no endereço (para linkar e compartilhar), o canonical aponta para a combinação
 escolhida e uma combinação sem resultado recebe `noindex`.
 
-**3. Anúncios com regra (rodízio de verdade).** A aba “Anúncios” do painel publica espaços
+**3. Filtro por dia (a listagem abre no dia de hoje).** A página de notícias mostra **só o que
+saiu hoje**, no fuso de **Mato Grosso (UTC-4, sem horário de verão)** — o dia do calendário do
+estado, não o do relógio de quem está lendo. Para ver outro dia, o leitor troca a data:
+
+- o **campo de data** (calendário nativo, abre o seletor do celular);
+- os atalhos **“Hoje”** e **“Ontem”**;
+- as setas **‹ ›**, que **pulam os dias sem notícia** (se o dia anterior estiver vazio, a seta
+  vai para o dia anterior que tem notícia; quando não existe nenhum, ela desliga).
+
+A escolha vira um **intervalo de tempo na consulta** (`publicado_em` da meia-noite do dia até a
+meia-noite do dia seguinte, no fuso de Mato Grosso) e fica no endereço: `?data=AAAA-MM-DD`. O
+filtro de categoria continua valendo junto (`?categoria=Soja&data=2026-11-10`), e **os números
+dos chips passam a contar só o dia que está na tela**.
+
+- **Não é guardado no navegador**: quem entra de novo vê o dia de hoje.
+- **Dia sem notícia**: a página avisa (“Ainda não publicamos notícia hoje (DD/MM/AAAA)” ou
+  “Não publicamos notícias em DD/MM/AAAA.”) e oferece o caminho de volta — **“Ver as de
+  ontem”** (quando ontem tem notícia) ou **“Voltar para as de hoje”**.
+- **SEO**: só o dia de hoje é indexado. Um dia diferente mantém o `canonical` da página
+  principal e recebe `noindex, follow` (o conteúdo é o mesmo, muda só a data).
+- **“Carregar mais”** carrega mais notícias **do mesmo dia**.
+
+**4. Anúncios com regra (rodízio de verdade).** A aba “Anúncios” do painel publica espaços
 patrocinados em duas formas (faixa e card) e em duas posições (lista de notícias e fim da
 matéria). Todo anúncio precisa de **autorização do anunciante** (campo “Autorizado por”, Lei
 9.279/1996, art. 37) e aparece com selo de “Publicidade”, aviso de que a Q GRÃOS é corretora
@@ -294,11 +330,11 @@ Como os espaços são distribuídos:
   de autorização ficam restritos ao painel**: a chave pública do site não consegue lê-los (o
   banco devolve 401) e quem entra no Supabase sem ser administrador também não enxerga nada.
 
-**4. Métricas.** Cada matéria conta **visualizações** (aberturas da página) e **cliques**
+**5. Métricas.** Cada matéria conta **visualizações** (aberturas da página) e **cliques**
 (cliques na manchete). As duas ficam na tabela do painel, e o clique na manchete também
 aparece como evento nas visitas.
 
-**5. Contato a partir da matéria (bloco compacto).** No fim da página da matéria existe apenas
+**6. Contato a partir da matéria (bloco compacto).** No fim da página da matéria existe apenas
 um bloco pequeno, **"O que você busca hoje?"**, com um seletor (Grãos, CTE + MDF-e, Agenciamento
 de cargas, Seguro de cargas) e um **botão dourado de WhatsApp**. Não há telefone, e-mail nem
 bloco de contato repetido na matéria: quem quiser falar com a Q GRÃOS clica no botão.

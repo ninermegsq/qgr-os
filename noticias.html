@@ -60,7 +60,7 @@
 
     <!-- Styles locais: carregam primeiro e o site funciona mesmo sem internet.
          O "?v=" evita que o navegador use uma versao antiga em cache. -->
-    <link rel="stylesheet" href="style.css?v=13">
+    <link rel="stylesheet" href="style.css?v=14">
 
     <!-- Favicon em SVG inline: evita requisição extra e erro 404 -->
     <link rel="icon"
@@ -92,6 +92,11 @@
         <symbol id="ic-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
             stroke-linecap="round" stroke-linejoin="round">
             <path d="m9.4 4.8 7.2 7.2-7.2 7.2" />
+        </symbol>
+        <symbol id="ic-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19.5 12h-14" />
+            <path d="m11 6.2-5.8 5.8 5.8 5.8" />
         </symbol>
         <symbol id="ic-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
             stroke-linecap="round" stroke-linejoin="round">
@@ -180,6 +185,36 @@
         <!-- Lista de notícias (conteúdo vindo do Supabase) -->
         <section id="noticias" class="news news-page">
             <div class="container">
+                <!-- Filtro por data: a listagem abre sempre com o que saiu
+                     hoje. Para ver outro dia, o leitor troca a data (os
+                     botões ‹ › pulam para o dia vizinho que tem publicação). -->
+                <div class="news-data" id="newsData">
+                    <div class="news-data-linha">
+                        <span class="news-data-rotulo">Notícias do dia</span>
+                        <div class="news-data-controle">
+                            <button type="button" class="news-data-nav" id="newsDataAnterior"
+                                aria-label="Ver o dia anterior que tem notícia">
+                                <svg class="ic" aria-hidden="true" focusable="false">
+                                    <use href="#ic-chevron-left"></use>
+                                </svg>
+                            </button>
+                            <input type="date" id="newsDataInput" class="news-data-input"
+                                aria-label="Escolher o dia das notícias">
+                            <button type="button" class="news-data-nav" id="newsDataProximo"
+                                aria-label="Ver o próximo dia que tem notícia">
+                                <svg class="ic" aria-hidden="true" focusable="false">
+                                    <use href="#ic-chevron-right"></use>
+                                </svg>
+                            </button>
+                            <button type="button" class="news-data-chip" id="newsDataHoje"
+                                aria-pressed="false">Hoje</button>
+                            <button type="button" class="news-data-chip" id="newsDataOntem"
+                                aria-pressed="false">Ontem</button>
+                        </div>
+                    </div>
+                    <p class="news-data-status" id="newsDataStatus" aria-live="polite"></p>
+                </div>
+
                 <!-- Filtro por categoria: dá para marcar mais de uma
                      (ex.: Soja + Milho). A escolha fica no endereço. -->
                 <div class="filtro" id="filtroCategorias" hidden>
@@ -264,7 +299,7 @@
          O "?v=" evita que o navegador use uma versão antiga em cache. -->
     <script src="site.config.js?v=1" defer></script>
     <script src="supabase-api.js?v=1" defer></script>
-    <script src="script.js?v=10" defer></script>
+    <script src="script.js?v=11" defer></script>
 </body>
 
 </html>

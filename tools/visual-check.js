@@ -1005,7 +1005,27 @@ async function verificarPainelAdmin(browser, report) {
                 }
             }, idsVisitantes);
 
+            // Confere o que sobrou depois da limpeza: o painel tem que
+            // mostrar zero visitas de teste.
+            const restantes = await page.evaluate(async () => {
+                if (!window.QGSupabase) return null;
+                try {
+                    const linhas = await window.QGSupabase.select('visitas', 'select=id&referrer=like.*127.0.0.1*');
+                    return (linhas || []).length;
+                } catch (erro) {
+                    return null;
+                }
+            });
+
             painel.limpezaVisitas = limpezaVisitas;
+
+            if (restantes !== null) {
+                painel.limpezaVisitas.restantes = restantes;
+
+                if (restantes > 0) {
+                    report.notes.push('admin: sobraram ' + restantes + ' visita(s) de teste no painel');
+                }
+            }
 
             if (limpezaVisitas.erro) {
                 report.notes.push('admin: nao foi possivel apagar as visitas de teste -> ' + limpezaVisitas.erro);
@@ -1756,7 +1776,8 @@ async function main() {
             ' | anuncios: ' + (painel.abas.anuncios ? painel.abas.anuncios.linhas + ' linha(s)' : '-') +
             ' | visitas: ' + (painel.abas.visitas ? painel.abas.visitas.linhas + ' linha(s)' : '-') +
             ' | lead de teste apagado: ' + (painel.limpeza ? painel.limpeza.apagados : '-') +
-            ' | visitas de teste apagadas: ' + (painel.limpezaVisitas ? painel.limpezaVisitas.apagadas : '-'));
+            ' | visitas de teste apagadas: ' + (painel.limpezaVisitas ? painel.limpezaVisitas.apagadas : '-') +
+            ' | visitas de teste restantes: ' + (painel.limpezaVisitas && painel.limpezaVisitas.restantes !== undefined ? painel.limpezaVisitas.restantes : '-'));
     }
 
     if (report.notes.length) {

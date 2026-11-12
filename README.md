@@ -554,7 +554,14 @@ A coleta não depende de ninguém: ela roda sozinha no repositório, pela workfl
 | Quando | De quanto em quanto |
 | --- | --- |
 | Segunda a sexta, das 8h às 17h45 (horário de Mato Grosso) | 15 minutos |
-| Fora desse período (noite, sábado e domingo) | 2 horas |
+| Fora desse período, de segunda a sexta | 2 horas |
+| Sábado e domingo, das 8h às 16h | 2 horas |
+| Sábado e domingo, à noite | 2 horas |
+
+O cron do GitHub roda em UTC: a workflow usa `*/15 12-21 * * 1-5` para o expediente
+(08h–17h45 de Mato Grosso) e `0 0,2,4,6,8,10,22 * * *` mais `0 12,14,16,18,20 * * 6,7`
+para o resto. Os horários de 2 em 2 horas não invadem o expediente, para não disparar duas
+coletas ao mesmo tempo.
 
 **Por que 15 minutos e não 5:** preço físico de grão não muda a cada 5 minutos. O IMEA publica
 1 a 2 vezes por dia e o Investing.com só anda junto com o mercado. O ciclo de 15 minutos dentro

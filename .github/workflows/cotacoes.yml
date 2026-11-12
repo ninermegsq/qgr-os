@@ -12,8 +12,13 @@
 # CADENCIA
 #   */15 12-21 (UTC) -> de segunda a sexta, das 08h as 17h45 (Mato
 #                       Grosso e UTC-4): a cada 15 minutos.
-#   0 */2 (UTC)      -> a cada 2 horas, sempre (noites, sabado e
-#                       domingo, e o resto da noite).
+#   0 0,2,4,6,8,10,22 -> de 2 em 2 horas fora do expediente (18h, 20h,
+#                       22h, 00h, 02h, 04h e 06h de MT), todo dia.
+#   0 12,14,16,18,20  -> sabado e domingo, de 2 em 2 horas, no
+#                       horario comercial (08h as 16h de MT).
+#
+# Os horarios de 2 em 2 horas NAO cobrem as horas do expediente, para
+# nao disparar duas coletas ao mesmo tempo.
 #
 # PRECO FISICO NAO MUDA A CADA 5 MINUTOS
 #   O IMEA publica 1 a 2 vezes por dia e o Investing so muda junto
@@ -35,9 +40,11 @@ name: Atualizar cotacoes
 on:
   schedule:
     # Segunda a sexta, 08h-17h45 no horario de Mato Grosso (UTC-4).
-    - cron: '*/15 12-21 * * 1-6'
-    # Fora do expediente: de 2 em 2 horas, todos os dias.
-    - cron: '0 */2 * * *'
+    - cron: '*/15 12-21 * * 1-5'
+    # Fora do expediente: de 2 em 2 horas, todo dia.
+    - cron: '0 0,2,4,6,8,10,22 * * *'
+    # Sabado e domingo, de 2 em 2 horas, dentro do horario comercial.
+    - cron: '0 12,14,16,18,20 * * 6,7'
 
   # Rodar na mao pelo painel do GitHub.
   workflow_dispatch:

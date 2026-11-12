@@ -63,6 +63,7 @@
             <button type="button" class="tab" data-tab="leads" role="tab" aria-selected="false">Leads</button>
             <button type="button" class="tab" data-tab="visitas" role="tab" aria-selected="false">Visitas</button>
             <button type="button" class="tab" data-tab="anuncios" role="tab" aria-selected="false">Anúncios</button>
+            <button type="button" class="tab" data-tab="cotacoes" role="tab" aria-selected="false">Cotações</button>
         </nav>
 
         <main class="content">
@@ -442,12 +443,75 @@
                     <p class="empty" id="adEmpty" hidden>Nenhum anúncio cadastrado.</p>
                 </div>
             </section>
+
+            <!-- ---------- COTAÇÕES ---------- -->
+            <section class="tab-panel" id="tab-cotacoes" role="tabpanel" hidden>
+                <div class="panel-box">
+                    <h2>Como as cotações chegam no site</h2>
+                    <ul class="rotacao-explica">
+                        <li><strong>Coleta fora do site:</strong> o navegador não chama as APIs do mercado (CORS). A coleta roda no servidor, pelo script <code>npm run cotacoes:coletar</code>.</li>
+                        <li><strong>Tabela única:</strong> tudo que a coleta traz é gravado em <code>public.cotacoes</code>, com a fonte, o mercado, o preço e a hora da coleta.</li>
+                        <li><strong>Site lê do banco:</strong> a página de cotações mostra só o que está publicado, com a fonte e o horário de cada número.</li>
+                        <li><strong>Sem número inventado:</strong> se a fonte falhar, a cotação antiga continua no ar com o horário dela — nada é estimado.</li>
+                    </ul>
+                    <p class="rotacao-nota">
+                        O status de cada fonte (ok, erro ou pendente) fica na tabela abaixo. Uma fonte com erro
+                        não apaga o que já foi publicado: ela apenas avisa que está fora do ar.
+                    </p>
+                </div>
+
+                <div class="panel-box">
+                    <div class="panel-head">
+                        <h2>Fontes consultadas</h2>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Fonte</th>
+                                    <th>Status</th>
+                                    <th>Itens</th>
+                                    <th>Última coleta</th>
+                                    <th>Mensagem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cotFontesBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="empty" id="cotFontesEmpty" hidden>Nenhuma fonte registrada ainda.</p>
+                </div>
+
+                <div class="panel-box">
+                    <div class="panel-head">
+                        <h2>Cotações cadastradas</h2>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Mercado</th>
+                                    <th>Fonte</th>
+                                    <th>Preço</th>
+                                    <th>Variação</th>
+                                    <th>Região</th>
+                                    <th>Atualizado</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cotTableBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="empty" id="cotEmpty" hidden>Nenhuma cotação cadastrada.</p>
+                </div>
+            </section>
         </main>
     </div>
 
     <script src="../site.config.js?v=1"></script>
     <script src="../supabase-api.js?v=1"></script>
-    <script src="admin.js?v=2"></script>
+    <script src="admin.js?v=3"></script>
 </body>
 
 </html>

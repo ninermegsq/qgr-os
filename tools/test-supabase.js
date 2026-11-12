@@ -24,6 +24,13 @@
  *                                          visualizacao da materia
  *  13. GET  /rest/v1/noticias com publicado_em=gte./lt. -> o filtro de
  *                                          data (a listagem abre no dia)
+ *  14. GET  /rest/v1/cotacoes            -> o público lê só as cotações
+ *                                          publicadas
+ *  15. POST /rest/v1/cotacoes            -> BLOQUEADO (a chave anônima
+ *                                          não publica preço)
+ *  16. GET  /rest/v1/cotacoes_fontes     -> BLOQUEADO (o estado da
+ *                                          coleta é do painel)
+ *  17. Painel: o admin lê cotações e o estado das fontes
  *
  * O lead de teste usa o e-mail TESTE@QGRAOS.INVALID (domínio reservado
  * pela RFC 2606, impossível de existir) e é removido no final.
@@ -420,6 +427,50 @@ async function principal() {
         conferir('Filtro por data (nao ha noticia publicada no banco para testar)', true, 'sem noticia no banco');
     }
 
+    /* 14. Area de cotacoes: o publico le so o que esta publicado -- */
+    const cotacoes = await chamar(
+        'GET',
+        '/rest/v1/cotacoes?select=id,fonte,mercado,simbolo,produto,preco,unidade,publicado' +
+        '&publicado=eq.true&limit=20'
+    );
+
+    conferir('GET /cotacoes responde 200', cotacoes.status === 200, 'HTTP ' + cotacoes.status);
+    conferir('GET /cotacoes devolve lista', Array.isArray(cotacoes.dados),
+        Array.isArray(cotacoes.dados) ? cotacoes.dados.length + ' cotacao(oes)' : 'nao e lista');
+
+    /* Sem filtro de publicado: a RLS tem de barrar o que nao esta no ar */
+    const todasCotacoes = await chamar(
+        'GET',
+        '/rest/v1/cotacoes?select=id,publicado&limit=200'
+    );
+
+    const visiveis = Array.isArray(todasCotacoes.dados) ? todasCotacoes.dados : [];
+    const naoPublicadas = visiveis.filter(item => item.publicado !== true);
+
+    conferir('A chave anonima nao ve cotacao fora do ar',
+        todasCotacoes.status === 200 && naoPublicadas.length === 0,
+        'HTTP ' + todasCotacoes.status + ', ' + visiveis.length + ' linha(s) visivel(is), ' +
+        naoPublicadas.length + ' nao publicada(s)');
+
+    /* 15. A chave anonima nao publica preco ------------------------- */
+    const cotacaoForjada = await chamar('POST', '/rest/v1/cotacoes', {
+        fonte: 'imea',
+        mercado: 'spot',
+        simbolo: 'teste_automatisado',
+        produto: 'Cotacao de teste',
+        preco: 9999.99,
+        publicado: true
+    });
+
+    conferir('POST /cotacoes direto e bloqueado para a chave anonima',
+        bloqueado(cotacaoForjada), 'HTTP ' + cotacaoForjada.status);
+
+    /* 16. O estado das fontes e do painel --------------------------- */
+    const fontes = await chamar('GET', '/rest/v1/cotacoes_fontes?select=fonte,status,itens&limit=10');
+
+    conferir('GET /cotacoes_fontes nao devolve nada para a chave anonima',
+        semLinhasVisiveis(fontes), detalheTabela(fontes));
+
     /* 8. Validacao: e-mail invalido tem de ser recusado --------------- */
     const invalido = await chamar('POST', '/rest/v1/rpc/registrar_lead', {
         p_nome: 'Teste',
@@ -697,6 +748,29 @@ async function principal() {
                     apagadoAnuncio.status === 204 || apagadoAnuncio.status === 200,
                     'HTTP ' + apagadoAnuncio.status);
             }
+
+            /* 17. Area de cotacoes no painel ----------------------------- */
+            const cotacoesAdmin = await fetch(
+                CONFIG.url + '/rest/v1/cotacoes?select=id,fonte,mercado,simbolo,produto,preco,publicado&limit=50',
+                { headers: autorizado }
+            );
+            const linhasCotacoes = await cotacoesAdmin.json();
+
+            conferir('Painel le as cotacoes com a sessao de admin',
+                cotacoesAdmin.status === 200 && Array.isArray(linhasCotacoes),
+                'HTTP ' + cotacoesAdmin.status + ', ' +
+                (Array.isArray(linhasCotacoes) ? linhasCotacoes.length + ' cotacao(oes)' : 'sem lista'));
+
+            const fontesAdmin = await fetch(
+                CONFIG.url + '/rest/v1/cotacoes_fontes?select=fonte,status,itens,coletado_em&limit=20',
+                { headers: autorizado }
+            );
+            const linhasFontes = await fontesAdmin.json();
+
+            conferir('Painel le o estado das fontes de cotacao',
+                fontesAdmin.status === 200 && Array.isArray(linhasFontes),
+                'HTTP ' + fontesAdmin.status + ', ' +
+                (Array.isArray(linhasFontes) ? linhasFontes.length + ' fonte(s)' : 'sem lista'));
 
             /* 10. Limpeza: o teste nao pode deixar lixo no banco ------
              * Apaga o lead e a visita criados por esta execucao. */

@@ -38,6 +38,28 @@
         noticia: 'Fim da matéria'
     };
 
+    /* Como a fonte e o mercado aparecem no painel */
+    const ROTULO_FONTE_COTACAO = {
+        imea: 'IMEA',
+        grao_direto: 'Grão Direto',
+        investing: 'Investing.com'
+    };
+
+    const ROTULO_MERCADO_COTACAO = {
+        spot: 'Preço físico (MT)',
+        regional: 'Regional',
+        futuros: 'Chicago (CBOT)',
+        b3: 'B3',
+        fx: 'Dólar',
+        macro: 'Macro'
+    };
+
+    const ROTULO_STATUS_FONTE = {
+        ok: 'Ok',
+        erro: 'Erro',
+        pendente: 'Pendente'
+    };
+
     /* Limite do resumo: o banco recusa textos maiores (CHECK de 320) */
     const LIMITE_RESUMO = 320;
 
@@ -136,6 +158,8 @@
         leads: [],
         noticias: [],
         anuncios: [],
+        cotacoes: [],
+        cotacoesFontes: [],
         filtroLeads: ''
     };
 
@@ -260,6 +284,7 @@
         if (nome === 'leads') carregarLeads();
         if (nome === 'visitas') carregarVisitas();
         if (nome === 'anuncios') carregarAnuncios();
+        if (nome === 'cotacoes') carregarCotacoes();
         if (nome === 'resumo') carregarResumo();
     }
 
@@ -711,6 +736,178 @@
                 criar('td', {}, [acaoEditar, espaco(), acaoPublicar, espaco(), acaoExcluir])
             ]));
         });
+    }
+
+    /* ---------- Cotações ---------- */
+
+    async function carregarCotacoes() {
+        const corpo = byId('cotTableBody');
+        const vazio = byId('cotEmpty');
+        const corpoFontes = byId('cotFontesBody');
+        const vazioFontes = byId('cotFontesEmpty');
+
+        try {
+            const linhas = await api.select(
+                'cotacoes',
+                'select=id,fonte,mercado,simbolo,produto,regiao,preco,preco_max,preco_min,' +
+                'variacao,variacao_abs,unidade,referencia,publicado,atualizado_em,criado_em' +
+                '&order=mercado.asc,produto.asc&limit=500'
+            );
+
+            estado.cotacoes = linhas || [];
+            desenharCotacoes();
+
+            /* As fontes ficam em outra tabela (privada: so o painel ve). */
+            try {
+                const fontes = await api.select(
+                    'cotacoes_fontes',
+                    'select=fonte,nome,url,status,mensagem,itens,coletado_em&order=fonte.asc&limit=50'
+                );
+
+                estado.cotacoesFontes = fontes || [];
+            } catch (erro) {
+                estado.cotacoesFontes = [];
+            }
+
+            desenharFontesCotacao();
+        } catch (erro) {
+            limpar(corpo);
+            vazio.hidden = true;
+            corpo.appendChild(criar('tr', {}, [
+                criar('td', { colSpan: '9', texto: 'Erro ao carregar: ' + mensagemDeErro(erro) })
+            ]));
+
+            limpar(corpoFontes);
+            vazioFontes.hidden = true;
+        }
+    }
+
+    function formatarPrecoCotacao(valor, unidade) {
+        if (valor === null || valor === undefined || valor === '') return '—';
+
+        const numero = Number(valor);
+        if (isNaN(numero)) return '—';
+
+        const texto = numero.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 4
+        });
+
+        const u = String(unidade || '');
+
+        if (u.indexOf('US$') === 0) return 'US$ ' + texto;
+        if (u.indexOf('¢') === 0) return '¢ ' + texto;
+        if (u.indexOf('R$') === 0 || u.indexOf('BRL') === 0) return 'R$ ' + texto;
+
+        return texto;
+    }
+
+    function desenharCotacoes() {
+        const corpo = byId('cotTableBody');
+        const vazio = byId('cotEmpty');
+
+        limpar(corpo);
+        vazio.hidden = estado.cotacoes.length > 0;
+
+        estado.cotacoes.forEach(cotacao => {
+            const variacao = cotacao.variacao === null || cotacao.variacao === undefined
+                ? null
+                : Number(cotacao.variacao);
+
+            const variacaoTexto = variacao === null || isNaN(variacao)
+                ? (cotacao.variacao_abs === null || cotacao.variacao_abs === undefined
+                    ? '—'
+                    : (Number(cotacao.variacao_abs) > 0 ? '+' : '') + String(cotacao.variacao_abs))
+                : (variacao > 0 ? '+' : '') + variacao.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }) + '%';
+
+            const acaoPublicar = criar('button', {
+                type: 'button',
+                classe: 'btn ghost small',
+                texto: cotacao.publicado === true ? 'Tirar do ar' : 'Publicar'
+            });
+            acaoPublicar.addEventListener('click', () => alternarPublicacaoCotacao(cotacao));
+
+            const acaoExcluir = criar('button', {
+                type: 'button',
+                classe: 'btn danger',
+                texto: 'Excluir'
+            });
+            acaoExcluir.addEventListener('click', () => excluirCotacao(cotacao));
+
+            corpo.appendChild(criar('tr', {}, [
+                criar('td', { classe: 'wrap' }, [
+                    criar('strong', { texto: cotacao.produto || cotacao.simbolo || '—' }),
+                    criar('div', { texto: cotacao.simbolo || '', style: 'color:#6B6B6B;font-size:0.82rem' })
+                ]),
+                criar('td', { texto: ROTULO_MERCADO_COTACAO[cotacao.mercado] || cotacao.mercado || '—' }),
+                criar('td', { texto: ROTULO_FONTE_COTACAO[cotacao.fonte] || cotacao.fonte || '—' }),
+                criar('td', { texto: formatarPrecoCotacao(cotacao.preco, cotacao.unidade) }),
+                criar('td', { texto: variacaoTexto }),
+                criar('td', { texto: cotacao.regiao || '—' }),
+                criar('td', { texto: formatarData(cotacao.atualizado_em) }),
+                criar('td', {}, [criar('span', {
+                    classe: 'pill ' + (cotacao.publicado === true ? 'publicado' : 'rascunho'),
+                    texto: cotacao.publicado === true ? 'No ar' : 'Fora do ar'
+                })]),
+                criar('td', {}, [acaoPublicar, espaco(), acaoExcluir])
+            ]));
+        });
+    }
+
+    function desenharFontesCotacao() {
+        const corpo = byId('cotFontesBody');
+        const vazio = byId('cotFontesEmpty');
+
+        limpar(corpo);
+        vazio.hidden = estado.cotacoesFontes.length > 0;
+
+        estado.cotacoesFontes.forEach(fonte => {
+            corpo.appendChild(criar('tr', {}, [
+                criar('td', { classe: 'wrap' }, [
+                    criar('strong', { texto: ROTULO_FONTE_COTACAO[fonte.fonte] || fonte.nome || fonte.fonte }),
+                    fonte.url
+                        ? criar('div', { texto: fonte.url, style: 'color:#6B6B6B;font-size:0.78rem;word-break:break-all' })
+                        : null
+                ]),
+                criar('td', {}, [criar('span', {
+                    classe: 'pill ' + (fonte.status === 'ok' ? 'publicado' : (fonte.status === 'erro' ? 'pausado' : 'rascunho')),
+                    texto: ROTULO_STATUS_FONTE[fonte.status] || fonte.status || 'Pendente'
+                })]),
+                criar('td', { texto: String(fonte.itens === null || fonte.itens === undefined ? 0 : fonte.itens) }),
+                criar('td', { texto: formatarData(fonte.coletado_em) }),
+                criar('td', { classe: 'wrap', texto: fonte.mensagem || '—' })
+            ]));
+        });
+    }
+
+    async function alternarPublicacaoCotacao(cotacao) {
+        try {
+            await api.update('cotacoes', 'id=eq.' + encodeURIComponent(cotacao.id), {
+                publicado: cotacao.publicado !== true
+            });
+
+            await carregarCotacoes();
+        } catch (erro) {
+            window.alert('Erro ao mudar a cotação: ' + mensagemDeErro(erro));
+        }
+    }
+
+    async function excluirCotacao(cotacao) {
+        const nome = cotacao.produto || cotacao.simbolo || 'esta cotação';
+
+        if (!window.confirm('Excluir a cotação "' + nome + '"? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+
+        try {
+            await api.remove('cotacoes', 'id=eq.' + encodeURIComponent(cotacao.id));
+            await carregarCotacoes();
+        } catch (erro) {
+            window.alert('Erro ao excluir a cotação: ' + mensagemDeErro(erro));
+        }
     }
 
     function preencherFormularioAnuncio(anuncio) {

@@ -1,0 +1,107 @@
+{
+  "_leia_me": [
+    "Lista de instrumentos coletados do Investing.com.",
+    "",
+    "Cada item tem:",
+    "  simbolo  -> identificador da cotacao no Q GRAOS (obrigatorio)",
+    "  produto  -> nome que aparece no card do site",
+    "  mercado  -> spot | regional | futuros | b3 | fx | macro",
+    "  unidade  -> como o preco e mostrado (¢/bu, US$/t, pts, R$, US$)",
+    "  rotulo   -> credito no rodape do card",
+    "  id       -> id do instrumento no Investing (obrigatorio)",
+    "  modelo   -> endereco com {id}; padrao do coletor:",
+    "              https://endpoints.investing.com/pd-instruments/v1/instruments/{id}",
+    "",
+    "COMO CONFIRMAR O id: abra no navegador",
+    "  https://endpoints.investing.com/pd-instruments/v1/instruments/<id>",
+    "e veja se 'short_name' e o instrumento que voce espera. A busca do",
+    "Investing (api/search/v2/search) nao devolve 'quotes' para esses",
+    "termos, entao o id fica escrito aqui.",
+    "",
+    "IMPORTANTE: os ids do Investing mudam de tempos em tempos. Se a",
+    "coleta avisar 'nenhum preco reconhecido', confirme o id de novo."
+  ],
+
+  "fontes": [
+    {
+      "simbolo": "ZS",
+      "produto": "Soja (Chicago)",
+      "mercado": "futuros",
+      "unidade": "¢/bu",
+      "rotulo": "Chicago · Soja",
+      "id": 8916
+    },
+    {
+      "simbolo": "ZC",
+      "produto": "Milho (Chicago)",
+      "mercado": "futuros",
+      "unidade": "¢/bu",
+      "rotulo": "Chicago · Milho",
+      "id": 8918
+    },
+    {
+      "simbolo": "ZM",
+      "produto": "Farelo de soja (Chicago)",
+      "mercado": "futuros",
+      "unidade": "US$/t",
+      "rotulo": "Chicago · Farelo de soja",
+      "id": 8919
+    },
+    {
+      "simbolo": "KC",
+      "produto": "Café (Chicago)",
+      "mercado": "futuros",
+      "unidade": "¢/bu",
+      "rotulo": "Chicago · Café",
+      "id": 8832
+    },
+    {
+      "simbolo": "CT",
+      "produto": "Algodão (Chicago)",
+      "mercado": "futuros",
+      "unidade": "¢/bu",
+      "rotulo": "Chicago · Algodão",
+      "id": 8851
+    },
+    {
+      "simbolo": "IBOV",
+      "produto": "Ibovespa",
+      "mercado": "b3",
+      "unidade": "pts",
+      "rotulo": "B3 · Ibovespa",
+      "id": 17920
+    },
+    {
+      "simbolo": "USDBRL",
+      "produto": "Dólar/Real",
+      "mercado": "fx",
+      "unidade": "R$",
+      "rotulo": "Dólar/Real",
+      "id": 2103
+    },
+    {
+      "simbolo": "OURO",
+      "produto": "Ouro",
+      "mercado": "macro",
+      "unidade": "US$",
+      "rotulo": "Ouro",
+      "id": 8830
+    },
+    {
+      "simbolo": "BRENT",
+      "produto": "Petróleo Brent",
+      "mercado": "macro",
+      "unidade": "US$",
+      "rotulo": "Brent",
+      "id": 8833
+    },
+    {
+      "simbolo": "WTI",
+      "produto": "Petróleo WTI",
+      "mercado": "macro",
+      "unidade": "US$",
+      "rotulo": "WTI",
+      "id": 8849
+    }
+  ]
+}

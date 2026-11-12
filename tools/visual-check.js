@@ -53,6 +53,7 @@ const PAGES = [
     { name: 'home', url: '/' },
     { name: 'noticias', url: '/noticias.html' },
     { name: 'noticia', url: '/noticia.html' },
+    { name: 'cotacoes', url: '/cotacoes.html' },
     { name: 'publicidade', url: '/publicidade.html' },
     { name: '404', url: '/404.html' },
     { name: 'admin', url: '/admin/' }
@@ -626,6 +627,28 @@ function auditDom() {
             .querySelectorAll('.news-card').length
     };
 
+    /* ---------- Area de cotacoes ---------- */
+    const gradeCotacoes = document.getElementById('cotGrid');
+    const statusCotacoes = document.getElementById('cotStatusTexto');
+    const chipsCotacoes = document.getElementById('cotChips');
+    const filtroCotacoes = document.getElementById('cotFiltro');
+    const avisoGrade = gradeCotacoes ? gradeCotacoes.querySelector('.news-empty') : null;
+
+    result.cotacoes = {
+        gradeExiste: !!gradeCotacoes,
+        cartoes: gradeCotacoes ? gradeCotacoes.querySelectorAll('.cot-card').length : 0,
+        cartoesComPreco: gradeCotacoes ? gradeCotacoes.querySelectorAll('.cot-card .cot-preco').length : 0,
+        statusExiste: !!statusCotacoes,
+        status: statusCotacoes ? (statusCotacoes.textContent || '').trim().slice(0, 90) : '',
+        chipsExiste: !!chipsCotacoes,
+        chips: chipsCotacoes ? chipsCotacoes.querySelectorAll('button[aria-pressed]').length : 0,
+        chipsPressionados: chipsCotacoes ? chipsCotacoes.querySelectorAll('button[aria-pressed="true"]').length : 0,
+        filtroVisivel: filtroCotacoes ? filtroCotacoes.getBoundingClientRect().height > 0 : false,
+        avisoVazio: avisoGrade ? (avisoGrade.textContent || '').trim().slice(0, 90) : '',
+        linkParaCotacoes: !!document.querySelector('a[href="cotacoes.html"]'),
+        ctaExiste: !!document.querySelector('.cot-cta-box')
+    };
+
     /* ---------- Anuncios e selo de publicidade ---------- */
     const selos = document.querySelectorAll('.anuncio-selo');
 
@@ -979,7 +1002,7 @@ async function verificarPainelAdmin(browser, report) {
                 return !!cartoes && cartoes.children.length > 0;
             }, { timeout: 15000 }).catch(() => { /* dealtido nas regras abaixo */ });
 
-            const abas = ['resumo', 'noticias', 'anuncios', 'leads', 'visitas'];
+            const abas = ['resumo', 'noticias', 'anuncios', 'cotacoes', 'leads', 'visitas'];
 
             for (const aba of abas) {
                 await page.evaluate(nome => {
@@ -1948,6 +1971,39 @@ async function main() {
                         ' card(s) de "Mais noticias" sem "data-noticia-id" (o clique na manchete nao vira metrica)');
                 }
             }
+            /* A area de cotacoes: a pagina mostra o que o banco tem
+               (ou avisa que ainda nao ha cotacao) e leva o leitor para
+               o contato. Nada de preco inventado. */
+            if (target.name === 'cotacoes') {
+                if (!dom.cotacoes.gradeExiste) {
+                    report.problems.push(label + ': container das cotacoes ausente (#cotGrid)');
+                }
+                if (!dom.cotacoes.statusExiste) {
+                    report.problems.push(label + ': linha de status das cotacoes ausente (#cotStatusTexto)');
+                }
+                if (!dom.cotacoes.status) {
+                    report.problems.push(label + ': a linha de status das cotacoes ficou vazia');
+                }
+                if (dom.cotacoes.cartoes && dom.cotacoes.cartoesComPreco < dom.cotacoes.cartoes) {
+                    report.problems.push(label + ': ' +
+                        (dom.cotacoes.cartoes - dom.cotacoes.cartoesComPreco) +
+                        ' cartao(es) de cotacao sem preco');
+                }
+                if (!dom.cotacoes.cartoes && !dom.cotacoes.avisoVazio) {
+                    report.problems.push(label +
+                        ': a pagina de cotacoes nao mostrou cartao nem avisou que ainda nao ha cotacao');
+                }
+                if (dom.cotacoes.cartoes && !dom.cotacoes.chips) {
+                    report.problems.push(label + ': ha cotacoes na tela mas o filtro por mercado nao apareceu');
+                }
+                if (!dom.cotacoes.ctaExiste) {
+                    report.problems.push(label + ': a chamada comercial das cotacoes ausente (.cot-cta-box)');
+                }
+                if (!dom.cotacoes.linkParaCotacoes) {
+                    report.problems.push(label + ': a pagina de cotacoes nao tem link para ela mesma no menu');
+                }
+            }
+
             // A transparencia de publicidade precisa existir e citar a lei
             if (target.name === 'publicidade') {
                 const texto = await page.evaluate(() => document.body.textContent || '');

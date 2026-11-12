@@ -208,6 +208,8 @@ npm run sitemap
 | --- | --- |
 | `index.html` | Página principal (sobre, serviços, produtos, contato) + sprite de ícones SVG inline + SEO (OG/JSON-LD) |
 | `noticias.html` | **Página exclusiva das notícias** do agronegócio (grade, **filtro por dia (lista abre no dia de hoje)**, filtro por categoria, "carregar mais" e SEO próprio) |
+| `cotacoes.html` | **Página exclusiva das cotações** do agro (grade de preços, filtro por mercado, "carregar mais", fontes citadas, CTA de WhatsApp e SEO próprio) |
+| `cotacoes.js` | Lê a tabela `cotacoes` do Supabase e desenha os cards (preço, variação, unidade, região, fonte e hora da coleta) só com `textContent`, monta o filtro por mercado, a paginação e o SEO |
 | `noticia.html` | **Página da matéria**: o texto completo da notícia, hospedado no site (o visitante nunca é levado para fora), com SEO próprio (canonical, Open Graph, JSON-LD `NewsArticle`), crédito da fonte, **bloco compacto "O que você busca hoje?" com botão para a ficha de contato**, espaço patrocinado no fim e "Mais notícias" |
 | `noticia.js` | Carrega a matéria do banco e escreve na tela com `textContent` (nunca `innerHTML`), monta o SEO, conta a visualização, carrega o anúncio do fim e monta o link do botão de lead (escolha + contexto da matéria) |
 | `publicidade.html` | Política de transparência dos anúncios: o que é anúncio, o que a Q GRÃOS não endossa, autorização do anunciante, links `sponsored`, contadores e LGPD |
@@ -216,9 +218,9 @@ npm run sitemap
 | `script.js` | Menu mobile, rolagem suave, animação ao rolar, partículas, tilt 3D, envio ao WhatsApp, aplicação do `site.config.js`, **notícias + leads + analytics**, preenchimento automático da ficha a partir da matéria e URL de origem do lead |
 | `site.config.js` | **Fonte única dos dados**: telefone, e-mail, CNPJ, endereço, redes e chave do Supabase |
 | `supabase-api.js` | Cliente REST do Supabase (PostgREST + Auth) em `fetch` puro — sem SDK, sem CDN |
-| `admin/index.html` | Painel administrativo (login + abas Resumo/Notícias/Anúncios/Leads/Visitas) |
+| `admin/index.html` | Painel administrativo (login + abas Resumo/Notícias/Cotações/Anúncios/Leads/Visitas) |
 | `admin/admin.css` | Estilos do painel |
-| `admin/admin.js` | Lógica do painel (login, CRUD de notícias e de anúncios, status de lead, CSV, gráficos) |
+| `admin/admin.js` | Lógica do painel (login, CRUD de notícias, de cotações e de anúncios, status de lead, CSV, gráficos) |
 | `supabase/migrations/20260101000000_qg_init.sql` | Schema do banco: tabelas, RLS, RPC públicas e vistas do painel |
 | `supabase/functions/noticias/index.ts` | Edge Function `noticias` (feed público com cache) |
 | `supabase/config.toml` | Configuração do projeto Supabase (inclui `verify_jwt = false` da função) |
@@ -234,6 +236,9 @@ npm run sitemap
 | `tools/test-server.js` | Teste HTTP de ponta a ponta |
 | `tools/test-supabase.js` | Teste de integração com o Supabase (RLS, RPC, login e painel) |
 | `tools/visual-check.js` | Verificação visual real no Chrome headless (layout, contraste, interações) |
+| `tools/coletar-cotacoes.js` | Coletor de cotações (IMEA + Grão Direto + Investing.com): monta os cards, grava no Supabase ou imprime o SQL pronto |
+| `tools/cotacoes-investing.py` | Cliente Python (curl_cffi) da API da Investing.com, usado pelo coletor para os pregões de Chicago, B3, dólar e macro |
+| `tools/investing-fontes.json` | Lista dos instrumentos da Investing.com coletados (soja, milho, farelo, café, algodão, Ibovespa, dólar, ouro, Brent e WTI) |
 | `assets/` | Imagens do site |
 
 ## As páginas do site
@@ -242,6 +247,7 @@ npm run sitemap
 | --- | --- | --- |
 | Home | `/` (`index.html`) | Hero, sobre, serviços, produtos, **convite para as notícias** e contato |
 | Notícias | `/noticias.html` | **A lista de notícias do agronegócio** (página própria, com SEO próprio), **filtro por dia (abre no dia de hoje)**, filtro de categoria e espaços patrocinados |
+| Cotações | `/cotacoes.html` | **A lista de cotações do agro** (página própria, com SEO próprio): preço físico (MT), regional, Chicago, B3, dólar e macro, com filtro por mercado, "carregar mais" e a origem de cada número |
 | Matéria | `/noticia.html?id=…` | **A notícia inteira, hospedada no site**: texto completo, crédito da fonte, compartilhamento, **bloco "O que você busca hoje?" + botão para a ficha**, anúncio no fim e "Mais notícias" |
 | Publicidade | `/publicidade.html` | Política de transparência dos anúncios (como anunciar, o que a Q GRÃOS não endossa, LGPD) |
 | Erro 404 | `/404.html` | Página de erro com links para as seções e para as notícias |
@@ -373,6 +379,8 @@ O arquivo `supabase/migrations/20260101000000_qg_init.sql` cria tudo:
 | --- | --- |
 | `administradores` | Quem pode entrar no painel (ligado ao `user_id` do Auth) |
 | `noticias` | Notícias do agronegócio (`publicado`, `destaque`, `cliques`, `visualizacoes` e `conteudo`, o texto completo da matéria) |
+| `cotacoes` | Uma linha por cotação do agro (fonte, mercado, símbolo, produto, região, preço, variação, unidade, referência e `publicado`) — o anônimo lê só as publicadas |
+| `cotacoes_fontes` | Saúde de cada fonte de cotação (status, itens, coletado em) — só o painel enxerga |
 | `anuncios` | Espaços patrocinados (empresa, texto, posição, formato, `autorizacao`, `prioridade`, `peso`, `limite_impressoes`, `limite_impressoes_dia`, `impressoes`, `cliques`) — escrita só pelo painel |
 | `anuncio_impressoes_diarias` | Impressões do anúncio por dia (base da cota diária) |
 | `leads` | Contatos do formulário, com `status` e `consentimento` |
@@ -481,6 +489,53 @@ A função serve o feed público com cache (`/functions/v1/noticias?limite=6&cat
 - **Leads** — filtrar, mudar o status (novo / em andamento / convertido / descartado), abrir
   o WhatsApp do cliente, exportar CSV e excluir;
 - **Visitas** — eventos por tipo e as últimas interações.
+
+## A área de cotações
+
+A página `/cotacoes.html` é a pendant News: mostra **o preço do agro** (soja, milho, algodão,
+sorgo), os pregões de Chicago e da B3, o dólar e os indicadores macro, com a **origem de cada
+número** escrita no card.
+
+**Fontes (coleta no servidor, nunca no navegador):**
+
+| Fonte | O que traz | Como é coletada |
+| --- | --- | --- |
+| **IMEA** (`api1.imea.com.br`) | Preço físico de soja, milho e algodão por praça (Mato Grosso e regiões) | API `/cadeias/{id}/cotacoes` + `/cadeias/{id}/indicadores` (é o que separa preço de semente, frete e óleo) |
+| **Grão Direto** (`graodireto.com.br`) | Preço regional (CEPEA/ESALQ), futuros de Chicago e da B3, dólar | HTML `__NEXT_DATA__` (Next.js) das páginas `/quotations/soy`, `/corn` e `/sorghum` |
+| **Investing.com** | Soja, milho, farelo, café, algodão (Chicago), Ibovespa, dólar, ouro, Brent e WTI | `tools/cotacoes-investing.py` (Python + `curl_cffi`, com impersonation de Chrome) — a API Investment bloqueia CORS e anti-bot no navegador |
+
+**Tabelas no Supabase** (`supabase/migrations/20261112090000_qg_cotacoes.sql`):
+
+| Objeto | Para que serve |
+| --- | --- |
+| `cotacoes` | Uma linha por cotação (`fonte`, `mercado`, `simbolo`, `produto`, `regiao`, `preco`, `preco_max`, `preco_min`, `variacao`, `variacao_abs`, `unidade`, `referencia`, `publicado`). Chave única `(fonte, simbolo)` |
+| `cotacoes_fontes` | Saúde de cada fonte (`status`, `itens`, `coletado_em`) — alimenta o painel e o aviso da página |
+
+O visitante lê **só** as linhas com `publicado = true` (política RLS). A tabela de fontes é
+**restrita ao painel**: o anônimo não consegue nem ler.
+
+**Como rodar a coleta:**
+
+```bash
+npm run cotacoes:coletar            # coleta e grava no Supabase (pede login de admin)
+npm run cotacoes:simular            # dry-run: mostra o que seria gravado, sem gravar
+node tools/coletar-cotacoes.js --dry-run --sql   # imprime o SQL pronto (formato jsonb_to_recordset)
+```
+
+- Com credenciais: `QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD` (ou o arquivo local `.qg-admin.json`,
+  que está no `.gitignore`). Sem elas, o coletor imprime o SQL para colar no SQL Editor.
+- A Investing.com exige `python` com `curl_cffi` instalado (`pip install curl_cffi`); sem ele,
+  as outras duas fontes continuam funcionando.
+- O SQL impresso usa `jsonb_to_recordset` + `ON CONFLICT` — é o formato aceito pelo SQL Editor
+  do Supabase e pelas ferramentas de migração (um `VALUES` com muitas linhas não é interpretado).
+
+**No painel** (`/admin/`), a aba **Cotações** mostra a tabela toda (fonte, mercado, produto,
+preço, variação, data), o estado de cada fonte e deixa **publicar**, **despublicar** e **excluir**
+linha por linha.
+
+**Na página:** filtro por mercado (a escolha fica na URL, `?mercado=regional`), "carregar mais"
+(24 por vez) e, quando o filtro não tem resultado, `noindex` — o mesmo cuidado do portal de
+notícias.
 
 ## Dependências externas
 

@@ -38,6 +38,7 @@ const today = new Date().toISOString().slice(0, 10);
 const PAGINAS = [
     { loc: siteUrl, changefreq: 'monthly', priority: '1.0' },
     { loc: siteUrl + 'noticias.html', changefreq: 'daily', priority: '0.8' },
+    { loc: siteUrl + 'cotacoes.html', changefreq: 'daily', priority: '0.8' },
     { loc: siteUrl + 'publicidade.html', changefreq: 'yearly', priority: '0.3' }
 ];
 

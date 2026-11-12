@@ -2397,3 +2397,635 @@ footer {
         padding: 30px 24px;
     }
 }
+
+/* ==================================================================
+ * Área de cotações (cotacoes.html)
+ * ==================================================================
+ * A página de cotações tem a mesma moldura da de notícias: cabeçalho
+ * escuro, painel de status, filtro, grade de cards e um bloco
+ * comercial no fim. Os números vêm do Supabase (tabela cotacoes).
+ * ================================================================== */
+
+/* A navbar é fixa: o conteúdo começa abaixo dela */
+.page-cotacoes {
+    padding-top: var(--navbar-height);
+}
+
+/* ---------- Cabeçalho da página ---------- */
+
+.cot-hero {
+    position: relative;
+    overflow: hidden;
+    background: var(--gradient-green);
+    color: var(--text-light);
+    padding: clamp(46px, 6vw, 78px) 0 clamp(54px, 7vw, 92px);
+}
+
+/* Textura de pontos gerada em CSS (nenhum asset extra) */
+.cot-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.8) 1.5px, transparent 1.5px);
+    background-size: 18px 18px;
+    opacity: 0.1;
+    pointer-events: none;
+}
+
+.cot-hero-grade {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+    gap: clamp(28px, 5vw, 56px);
+    align-items: center;
+}
+
+.cot-hero-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    color: var(--secondary-color);
+    margin-bottom: 18px;
+}
+
+.cot-hero-mark .ic {
+    width: 30px;
+    height: 30px;
+}
+
+.cot-hero-tag {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 50px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: var(--secondary-color);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    margin-bottom: 16px;
+}
+
+.cot-hero h1 {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-size: clamp(2rem, 4.6vw, 3.2rem);
+    line-height: 1.15;
+    color: var(--text-light);
+    max-width: 720px;
+}
+
+.cot-hero-texto {
+    color: #E4EDE8;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    max-width: 620px;
+    margin-top: 16px;
+}
+
+.cot-hero-links {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 28px;
+}
+
+.cot-hero-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 22px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 50px;
+    color: var(--text-light);
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: var(--transition);
+}
+
+.cot-hero-link .ic {
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+.cot-hero-link:hover {
+    border-color: var(--secondary-color);
+    color: var(--secondary-color);
+    transform: translateY(-2px);
+}
+
+.cot-hero-link-destaque {
+    background: var(--gradient-gold);
+    border-color: transparent;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.cot-hero-link-destaque:hover {
+    color: var(--primary-color);
+    filter: brightness(1.05);
+}
+
+/* Painel com o resumo (quantas cotações, de quantas fontes, quando) */
+.cot-hero-painel {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 18px;
+    padding: 30px 26px;
+    display: grid;
+    gap: 22px;
+    backdrop-filter: blur(6px);
+}
+
+.cot-hero-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cot-hero-stat-valor {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--secondary-color);
+}
+
+.cot-hero-stat-valor-menor {
+    font-size: 1.25rem;
+}
+
+.cot-hero-stat-rotulo {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #DCE8E2;
+}
+
+/* ---------- Seção principal ---------- */
+
+.cot {
+    padding: clamp(56px, 8vw, 90px) 0;
+    background: var(--bg-gray);
+}
+
+.cot .highlight {
+    color: var(--gold-text);
+}
+
+.cot .section-header {
+    max-width: 760px;
+}
+
+/* Linha de status: quando os números foram atualizados */
+.cot-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 18px;
+    margin: 28px 0 26px;
+    background: var(--bg-light);
+    border: 1px solid rgba(15, 61, 46, 0.12);
+    border-left: 4px solid var(--secondary-color);
+    border-radius: 10px;
+    color: #3F3F3F;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.cot-status .ic {
+    color: var(--primary-color);
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+}
+
+/* ---------- Grade de cotações ---------- */
+
+.cot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+    margin-top: 30px;
+}
+
+.cot-card {
+    background: var(--bg-light);
+    border: 1px solid rgba(15, 61, 46, 0.08);
+    border-radius: 14px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+
+.cot-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: rgba(15, 61, 46, 0.18);
+}
+
+.cot-card-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.cot-mercado {
+    display: inline-block;
+    background: #FDF6E3;
+    color: #6E560C;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 50px;
+}
+
+.cot-fonte {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #5A5A5A;
+}
+
+.cot-produto {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--primary-color);
+}
+
+.cot-regiao {
+    color: #666;
+    font-size: 0.88rem;
+}
+
+.cot-valor {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+
+.cot-preco {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--primary-color);
+}
+
+.cot-unidade {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #5A5A5A;
+}
+
+/* Variação: verde para alta, vermelho para baixa */
+.cot-variacao {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 5px 11px;
+    border-radius: 50px;
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.cot-variacao .ic {
+    width: 1rem;
+    height: 1rem;
+}
+
+.cot-variacao-alta {
+    background: #E6F4EC;
+    color: #14663F;
+}
+
+.cot-variacao-baixa {
+    background: #FBEAE8;
+    color: #A32A1E;
+}
+
+.cot-variacao-neutra {
+    background: #EEF1F0;
+    color: #4A4A4A;
+}
+
+/* Faixa de mínimo/máximo */
+.cot-faixa {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: #666;
+}
+
+/* Rodapé do card: referência da fonte e hora da coleta */
+.cot-card-rodape {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid rgba(15, 61, 46, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    color: #6A6A6A;
+}
+
+.cot-referencia {
+    font-weight: 600;
+    color: #4A4A4A;
+}
+
+.cot-atualizado {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.cot-atualizado .ic {
+    width: 0.95rem;
+    height: 0.95rem;
+    color: var(--primary-color);
+}
+
+/* Aviso sobre a origem dos números */
+.cot-aviso {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 34px;
+    padding: 18px 20px;
+    background: #FFFDF5;
+    border: 1px solid rgba(138, 109, 18, 0.22);
+    border-radius: 12px;
+    color: #4A4A4A;
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.cot-aviso .ic {
+    color: var(--gold-text);
+    width: 1.2rem;
+    height: 1.2rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* ---------- Fontes consultadas ---------- */
+
+.cot-fontes {
+    padding: clamp(56px, 8vw, 90px) 0;
+    background: var(--bg-light);
+}
+
+.cot-fontes .highlight {
+    color: var(--gold-text);
+}
+
+.cot-fontes-grade {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: clamp(28px, 5vw, 60px);
+    align-items: start;
+}
+
+.cot-fontes-texto h2 {
+    font-size: 2.2rem;
+    color: var(--primary-color);
+    margin-bottom: 14px;
+}
+
+.cot-fontes-texto p {
+    color: #555;
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.cot-fontes-lista {
+    display: grid;
+    gap: 16px;
+}
+
+.cot-fonte-item {
+    display: grid;
+    gap: 6px;
+    padding: 22px 24px;
+    background: var(--bg-gray);
+    border: 1px solid rgba(15, 61, 46, 0.08);
+    border-radius: 14px;
+    transition: var(--transition);
+}
+
+.cot-fonte-item:hover {
+    border-color: rgba(15, 61, 46, 0.2);
+    box-shadow: var(--shadow-sm);
+}
+
+.cot-fonte-nome {
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.cot-fonte-desc {
+    color: #555;
+    font-size: 0.94rem;
+    line-height: 1.6;
+}
+
+.cot-fonte-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.cot-fonte-link:hover {
+    color: var(--gold-text);
+}
+
+/* ---------- Chamada comercial ---------- */
+
+.cot-cta {
+    padding: clamp(56px, 8vw, 90px) 0;
+    background: var(--bg-gray);
+}
+
+.cot-cta-box {
+    position: relative;
+    overflow: hidden;
+    background: var(--gradient-green);
+    color: var(--text-light);
+    border-radius: 18px;
+    padding: clamp(32px, 5vw, 56px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    flex-wrap: wrap;
+}
+
+.cot-cta-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.8) 1.5px, transparent 1.5px);
+    background-size: 16px 16px;
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+.cot-cta-texto {
+    position: relative;
+    z-index: 1;
+    max-width: 620px;
+}
+
+.cot-cta-tag {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    color: var(--secondary-color);
+    margin-bottom: 12px;
+}
+
+.cot-cta h2 {
+    font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+    color: var(--text-light);
+    margin-bottom: 12px;
+}
+
+.cot-cta p {
+    color: #E4EDE8;
+    font-size: 1rem;
+    line-height: 1.7;
+    margin-bottom: 22px;
+}
+
+.cot-cta-contatos {
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+}
+
+.cot-cta-contatos a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+.cot-cta-contatos a:hover {
+    color: var(--secondary-color);
+}
+
+.cot-cta-acao {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.cot-cta-acao .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.cot-cta-acao .btn-primary .ic {
+    width: 1.15rem;
+    height: 1.15rem;
+}
+
+.cot-cta-link {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #E4EDE8;
+    text-decoration: underline;
+}
+
+.cot-cta-link:hover {
+    color: var(--secondary-color);
+}
+
+/* ---------- Responsivo ---------- */
+
+@media (max-width: 900px) {
+    .cot-hero-grade {
+        grid-template-columns: 1fr;
+    }
+
+    .cot-hero-painel {
+        grid-template-columns: repeat(3, 1fr);
+        padding: 24px 20px;
+    }
+
+    .cot-fontes-grade {
+        grid-template-columns: 1fr;
+    }
+
+    .cot-cta-box {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .cot-cta-acao {
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 768px) {
+    .cot-hero {
+        padding: 40px 0 52px;
+    }
+
+    .cot-hero-painel {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .cot-grid {
+        grid-template-columns: 1fr;
+        gap: 18px;
+        margin-top: 24px;
+    }
+
+    .cot-preco {
+        font-size: 1.75rem;
+    }
+
+    .cot-card {
+        padding: 18px;
+    }
+}

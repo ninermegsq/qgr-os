@@ -46,6 +46,8 @@ const REQUIRED_FILES = [
     'style.css',
     'script.js',
     'noticia.js',
+    'cotacoes.html',
+    'cotacoes.js',
     'site.config.js',
     'supabase-api.js',
     'admin/index.html',
@@ -54,6 +56,9 @@ const REQUIRED_FILES = [
     'supabase/config.toml',
     'supabase/migrations/20260101000000_qg_init.sql',
     'supabase/functions/noticias/index.ts',
+    'supabase/migrations/20261112090000_qg_cotacoes.sql',
+    'tools/coletar-cotacoes.js',
+    'tools/investing-fontes.json',
     'package.json',
     'server.js',
     'robots.txt',
@@ -138,7 +143,7 @@ notes.push('Nenhum script de CDN: apenas arquivos locais');
 notes.push('site.config.js carregado antes de script.js');
 
 /* ---------- 5. Referencias locais existem no disco ---------- */
-const HTML_FILES = ['index.html', 'noticias.html', 'noticia.html', 'publicidade.html', '404.html'];
+const HTML_FILES = ['index.html', 'noticias.html', 'noticia.html', 'cotacoes.html', 'publicidade.html', '404.html'];
 let localReferences = 0;
 
 HTML_FILES.forEach(file => {
@@ -368,7 +373,7 @@ const seoRequired = [
 ];
 
 // As paginas publicas precisam de SEO completo
-const PAGINAS_SEO = ['index.html', 'noticias.html', 'noticia.html', 'publicidade.html'];
+const PAGINAS_SEO = ['index.html', 'noticias.html', 'noticia.html', 'cotacoes.html', 'publicidade.html'];
 
 PAGINAS_SEO.forEach(file => {
     const content = read(file);
@@ -395,6 +400,7 @@ const canonicalPattern = /<link[^>]+rel="canonical"[^>]+href="([^"]+)"/;
 const canonicalIndex = canonicalPattern.exec(html);
 const canonicalNoticias = canonicalPattern.exec(read('noticias.html'));
 const canonicalNoticia = canonicalPattern.exec(read('noticia.html'));
+const canonicalCotacoes = canonicalPattern.exec(read('cotacoes.html'));
 const canonicalPublicidade = canonicalPattern.exec(read('publicidade.html'));
 
 if (!canonicalIndex || canonicalIndex[1] !== 'https://qgraos.com.br/') {
@@ -405,6 +411,9 @@ if (!canonicalNoticias || canonicalNoticias[1] !== 'https://qgraos.com.br/notici
 }
 if (!canonicalNoticia || canonicalNoticia[1] !== 'https://qgraos.com.br/noticia.html') {
     errors.push('noticia.html sem o canonical https://qgraos.com.br/noticia.html');
+}
+if (!canonicalCotacoes || canonicalCotacoes[1] !== 'https://qgraos.com.br/cotacoes.html') {
+    errors.push('cotacoes.html sem o canonical https://qgraos.com.br/cotacoes.html');
 }
 if (!canonicalPublicidade || canonicalPublicidade[1] !== 'https://qgraos.com.br/publicidade.html') {
     errors.push('publicidade.html sem o canonical https://qgraos.com.br/publicidade.html');
@@ -1033,6 +1042,99 @@ if (/select=[^;]{0,300}\b(impressoes|cliques)\b/.test(js)) {
 }
 
 notes.push('Privacidade dos anuncios: o publico ve o conteudo, o painel ve cotas, metricas e autorizacao');
+
+/* ---------- 29. Area de cotacoes (IMEA + Grao Direto + Investing) ---------- */
+/* A pagina nao calcula preco no navegador: ela mostra o que o coletor
+   gravou no banco. Por isso o dado tem de vir com fonte e hora. */
+const cotacoesHtml = read('cotacoes.html');
+const cotacoesJs = read('cotacoes.js');
+const cotacoesMigration = read('supabase/migrations/20261112090000_qg_cotacoes.sql');
+
+['cotGrid', 'cotStatus', 'cotChips', 'cotEmpty', 'cotFiltro'].forEach(id => {
+    if (cotacoesHtml.indexOf('id="' + id + '"') === -1) {
+        errors.push('cotacoes.html sem o elemento #' + id);
+    }
+});
+
+/* O script da pagina le o banco e escreve com textContent */
+if (!/select\('cotacoes'/.test(cotacoesJs)) {
+    errors.push('cotacoes.js sem ler a tabela cotacoes do Supabase');
+}
+if (!/publicado=eq\.true/.test(cotacoesJs)) {
+    errors.push('cotacoes.js sem filtrar as cotacoes publicadas (publicado=eq.true)');
+}
+if (/\.innerHTML\s*\+?=/.test(semComentarios(cotacoesJs))) {
+    errors.push('cotacoes.js usa innerHTML (risco de XSS): use textContent');
+}
+if (/insertAdjacentHTML|outerHTML\s*=|document\.write/.test(cotacoesJs)) {
+    errors.push('cotacoes.js escreve HTML no DOM: use textContent e createElement');
+}
+
+/* A migration do banco */
+['cotacoes', 'cotacoes_fontes'].forEach(tabela => {
+    if (cotacoesMigration.indexOf('CREATE TABLE IF NOT EXISTS public.' + tabela) === -1) {
+        errors.push('Migration das cotacoes sem a tabela public.' + tabela);
+    }
+});
+if (!/ALTER TABLE public\.cotacoes ENABLE ROW LEVEL SECURITY/.test(cotacoesMigration)) {
+    errors.push('Migration das cotacoes sem ENABLE ROW LEVEL SECURITY em public.cotacoes');
+}
+if (!/CREATE POLICY cotacoes_leitura_publica[\s\S]{0,200}?USING \(publicado = true\)/.test(cotacoesMigration)) {
+    errors.push('A leitura publica das cotacoes nao esta restrita ao que esta publicado (USING (publicado = true))');
+}
+if (/GRANT[^;]*INSERT[^;]*ON public\.cotacoes[^;]*TO anon/i.test(cotacoesMigration)) {
+    errors.push('Migration libera INSERT anon em public.cotacoes (a cotacao e publicada pelo coletor ou pelo painel)');
+}
+if (!/REVOKE ALL ON public\.cotacoes_fontes FROM anon/.test(cotacoesMigration)) {
+    errors.push('O estado das fontes continua visivel para a chave anonima (e dado do painel)');
+}
+
+/* O painel tem a aba de cotacoes */
+if (!/data-tab="cotacoes"/.test(adminHtml)) {
+    errors.push('admin/index.html sem a aba de Cotacoes');
+}
+if (!/cotTableBody/.test(adminHtml)) {
+    errors.push('admin/index.html sem a tabela de cotacoes (#cotTableBody)');
+}
+if (!/cotFontesBody/.test(adminHtml)) {
+    errors.push('admin/index.html sem a tabela do estado das fontes (#cotFontesBody)');
+}
+if (!/carregarCotacoes/.test(adminJs)) {
+    errors.push('admin/admin.js sem a rotina que carrega as cotacoes');
+}
+
+/* O coletor existe, cobre as tres fontes e grava sem duplicar */
+const coletor = read('tools/coletar-cotacoes.js');
+
+['imea', 'grao_direto', 'investing'].forEach(fonte => {
+    if (coletor.indexOf("'" + fonte + "'") === -1) {
+        errors.push('tools/coletar-cotacoes.js sem a coleta da fonte ' + fonte);
+    }
+});
+if (!/on_conflict=fonte,simbolo/.test(coletor)) {
+    errors.push('tools/coletar-cotacoes.js sem gravar por on_conflict=fonte,simbolo (a cotacao volta sem duplicar)');
+}
+if (!/cotacoes_fontes/.test(coletor)) {
+    errors.push('tools/coletar-cotacoes.js sem gravar o estado das fontes (cotacoes_fontes)');
+}
+if (SECRET_PATTERN.test(coletor)) {
+    errors.push('tools/coletar-cotacoes.js com chave secreta embutida (use variavel de ambiente)');
+}
+
+/* A area de cotacoes entra no menu e no rodape do site todo */
+['index.html', 'noticias.html', 'cotacoes.html'].forEach(file => {
+    if (!/href="cotacoes\.html"/.test(read(file))) {
+        errors.push(file + ' sem link para a area de cotacoes (cotacoes.html)');
+    }
+});
+
+/* O sitemap anuncia a pagina */
+if (!sitemap.includes('cotacoes.html')) {
+    errors.push('sitemap.xml sem a pagina cotacoes.html');
+}
+
+notes.push('Area de cotacoes: pagina, filtro por mercado, painel e coletor conferidos');
+notes.push('Privacidade das cotacoes: o publico ve so o que esta publicado; o estado das fontes e do painel');
 
 /* ---------- Relatorio ---------- */
 function report() {

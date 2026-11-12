@@ -99,6 +99,13 @@ e confere se cada `data-config` do HTML recebe o valor certo):
 npm run test:config
 ```
 
+Teste da classificação de produto e estado (confere a regra que traduz o nome publicado
+pela fonte na chave do produto e na sigla do estado):
+
+```bash
+npm run test:classificacao
+```
+
 Teste de integração com o Supabase (roda contra o projeto real, com a chave pública):
 
 ```bash
@@ -223,6 +230,7 @@ npm run sitemap
 | `admin/admin.css` | Estilos do painel |
 | `admin/admin.js` | Lógica do painel (login, CRUD de notícias, de cotações e de anúncios, status de lead, CSV, gráficos) |
 | `supabase/migrations/20260101000000_qg_init.sql` | Schema do banco: tabelas, RLS, RPC públicas e vistas do painel |
+| `supabase/migrations/20261112103000_qg_cotacoes_produto_uf.sql` | Colunas `produto_chave` e `uf` da tabela `cotacoes` (filtros de produto e de estado), com índice e o preenchimento das cotações publicadas |
 | `supabase/functions/noticias/index.ts` | Edge Function `noticias` (feed público com cache) |
 | `supabase/config.toml` | Configuração do projeto Supabase (inclui `verify_jwt = false` da função) |
 | `server.js` | Servidor estático local, sem dependências (entrega `404.html` em URL errada) |
@@ -234,6 +242,7 @@ npm run sitemap
 | `tools/verify.js` | Verificador automático do projeto |
 | `tools/build-sitemap.js` | Gera o `sitemap.xml` com a data do build |
 | `tools/test-config.js` | Testa a aplicação do `site.config.js` no HTML |
+| `tools/test-classificacao.js` | Testa a regra de classificação de produto e estado (`classificacao-cotacoes.js`): 61 casos com o nome que a fonte publica |
 | `tools/test-server.js` | Teste HTTP de ponta a ponta |
 | `tools/test-supabase.js` | Teste de integração com o Supabase (RLS, RPC, login e painel) |
 | `tools/visual-check.js` | Verificação visual real no Chrome headless (layout, contraste, interações) |

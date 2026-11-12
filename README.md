@@ -608,6 +608,18 @@ apague o preço do dia. O corte é configurável em `QG_LOTE_PARCIAL` (padrão `
 **O que o leitor vê:** a página `/cotacoes.html` pergunta o banco de novo a cada 5 minutos
 (enquanto a aba está à vista) e redesenha a grade só quando algum número mudou de verdade.
 
+**Limitações conhecidas (para não ter surpresa):**
+
+* O cron do GitHub é *best effort*: a execução costuma atrasar de 10 a 20 minutos quando há
+  muita fila na plataforma. Não é um servidor com horário garantido.
+* Repositório público sem atividade por 60 dias tem o workflow agendado desativado pelo
+  GitHub. Push novo ou uso do botão reativam.
+* O IP dos runners do GitHub pode ser bloqueado pelo IMEA, pelo Grão Direto ou pelo
+  Investing.com. A trava de lote parcial mantém o preço antigo no ar nesse caso — o painel
+  mostra a fonte como *erro* e a página continua com o último valor bom.
+* A Edge Function `cotacoes-trigger` só existe depois do `supabase functions deploy`. Sem
+  ela, o botão do painel não funciona; a coleta automática (schedule) continua normal.
+
 **No painel** (`/admin/`), a aba **Cotações** mostra a tabela toda (fonte, mercado, produto,
 preço, variação, data), o estado de cada fonte e deixa **publicar**, **despublicar** e **excluir**
 linha por linha. O botão **Atualizar cotações agora** dispara a coleta (veja

@@ -758,6 +758,10 @@
         }
 
         try {
+            if (!api) {
+                throw new Error('O painel nao conseguiu falar com o servidor. Recarregue a pagina.');
+            }
+
             const sessao = await api.ensureSession();
 
             if (!sessao) {

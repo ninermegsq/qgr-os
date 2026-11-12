@@ -1,0 +1,105 @@
+# =====================================================================
+# Q GRAOS — coleta automatica de cotacoes
+# =====================================================================
+# O site e estatico: o navegador nao chama as APIs do mercado (CORS).
+# A coleta roda no servidor, aqui, e grava na tabela public.cotacoes.
+#
+# COMO FUNCIONA
+#   schedule         -> roda sozinho (ver a cadencia abaixo)
+#   workflow_dispatch-> roda na mao (botao "Run workflow" no GitHub)
+#   repository_dispatch -> usado pelo botao do painel /admin
+#
+# CADENCIA
+#   */15 12-21 (UTC) -> de segunda a sexta, das 08h as 17h45 (Mato
+#                       Grosso e UTC-4): a cada 15 minutos.
+#   0 */2 (UTC)      -> a cada 2 horas, sempre (noites, sabado e
+#                       domingo, e o resto da noite).
+#
+# PRECO FISICO NAO MUDA A CADA 5 MINUTOS
+#   O IMEA publica 1 a 2 vezes por dia e o Investing so muda junto
+#   com o mercado. Um ciclo de 15 minutos dentro do expediente e o
+#   que da conta: pegando o preco novo logo apos a divulgacao.
+#
+# SEGREDOS NECESSARIOS (Settings > Secrets and variables > Actions)
+#   QG_SUPABASE_SERVICE_ROLE   -> chave service role do Supabase
+#                                  (preferida: nao depende de senha)
+#   QG_ADMIN_EMAIL             -> e-mail do administrador (reserva)
+#   QG_ADMIN_PASSWORD          -> senha do administrador (reserva)
+#
+# As duas formas sao aceitas: se o QG_SUPABASE_SERVICE_ROLE existir,
+# ele e usado; senao o coletor entra no painel com e-mail e senha.
+# =====================================================================
+
+name: Atualizar cotacoes
+
+on:
+  schedule:
+    # Segunda a sexta, 08h-17h45 no horario de Mato Grosso (UTC-4).
+    - cron: '*/15 12-21 * * 1-6'
+    # Fora do expediente: de 2 em 2 horas, todos os dias.
+    - cron: '0 */2 * * *'
+
+  # Rodar na mao pelo painel do GitHub.
+  workflow_dispatch:
+    inputs:
+      manter_antigas:
+        description: 'Manter no ar as cotacoes que sumiram da fonte'
+        type: boolean
+        default: false
+
+  # Chamado por outra workflow (ou pelo botao do painel /admin).
+  workflow_call:
+    inputs:
+      manter_antigas:
+        type: boolean
+        default: false
+
+  # Disparo pelo botao "Atualizar cotacoes agora" do painel /admin,
+  # via Edge Function (supabase/functions/cotacoes-trigger).
+  repository_dispatch:
+    types: [cotacoes]
+
+# A workflow so precisa ler o codigo do repositorio.
+permissions:
+  contents: read
+
+# Nunca deixa duas coletas ao mesmo tempo.
+concurrency:
+  group: qg-coleta-cotacoes
+  cancel-in-progress: false
+
+jobs:
+  coletar:
+    name: Coleta IMEA + Grao Direto + Investing.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # O Investing.com bloqueia cliente que nao imita navegador: quem
+      # resolve isso e o curl_cffi (ver tools/cotacoes-investing.py).
+      - name: Instalar curl_cffi
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --disable-pip-version-check curl_cffi
+
+      - name: Coletar cotacoes
+        env:
+          QG_SUPABASE_SERVICE_ROLE: ${{ secrets.QG_SUPABASE_SERVICE_ROLE }}
+          QG_ADMIN_EMAIL: ${{ secrets.QG_ADMIN_EMAIL }}
+          QG_ADMIN_PASSWORD: ${{ secrets.QG_ADMIN_PASSWORD }}
+          QG_PYTHON: python
+        run: |
+          node tools/coletar-cotacoes.js ${{ (inputs.manter_antigas || false) && '--manter-antigas' || '' }}

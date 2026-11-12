@@ -740,6 +740,48 @@
 
     /* ---------- Cotações ---------- */
 
+    /* Dispara a coleta no servidor (GitHub Actions) pelo botao.
+       O token do GitHub fica na Edge Function: aqui so vai a sessao
+       do painel. */
+    async function atualizarCotacoesAgora() {
+        const botao = byId('cotAtualizarButton');
+        const aviso = byId('cotAtualizarAviso');
+
+        if (!botao) return;
+
+        botao.disabled = true;
+        botao.textContent = 'Disparando...';
+
+        if (aviso) {
+            aviso.hidden = false;
+            aviso.textContent = 'Disparando a coleta. Os numeros novos aparecem no site em poucos minutos.';
+        }
+
+        try {
+            const sessao = await api.ensureSession();
+
+            if (!sessao) {
+                throw new Error('Sessao expirada. Entre novamente no painel.');
+            }
+
+            const resposta = await api.invokeFunction('cotacoes-trigger', { origem: 'painel-admin' });
+
+            if (aviso) {
+                aviso.textContent = (resposta && resposta.mensagem) ||
+                    'Coleta disparada. Os numeros novos aparecem no site em poucos minutos.';
+            }
+
+            await carregarCotacoes();
+        } catch (erro) {
+            if (aviso) {
+                aviso.textContent = 'Nao foi possivel disparar a coleta: ' + mensagemDeErro(erro);
+            }
+        } finally {
+            botao.disabled = false;
+            botao.textContent = 'Atualizar cotações agora';
+        }
+    }
+
     async function carregarCotacoes() {
         const corpo = byId('cotTableBody');
         const vazio = byId('cotEmpty');
@@ -1311,6 +1353,8 @@
             estado.filtroLeads = evento.target.value || '';
             desenharLeads();
         });
+
+        byId('cotAtualizarButton').addEventListener('click', atualizarCotacoesAgora);
 
         document.querySelectorAll('.tab').forEach(botao => {
             botao.addEventListener('click', () => ativarAba(botao.getAttribute('data-tab')));

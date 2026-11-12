@@ -450,9 +450,11 @@
                     <h2>Como as cotações chegam no site</h2>
                     <ul class="rotacao-explica">
                         <li><strong>Coleta fora do site:</strong> o navegador não chama as APIs do mercado (CORS). A coleta roda no servidor, pelo script <code>npm run cotacoes:coletar</code>.</li>
+                        <li><strong>Coleta automática:</strong> no repositório, a workflow <code>Atualizar cotações</code> roda de 15 em 15 minutos, de segunda a sexta, das 8h às 17h45 (horário de Mato Grosso). Fora desse período, de 2 em 2 horas.</li>
+                        <li><strong>Botão aqui:</strong> o botão <strong>Atualizar cotações agora</strong> dispara a mesma coleta na hora. Ele não grava nada direto: pede ao servidor que rode a coleta, e os números novos aparecem no site em poucos minutos.</li>
                         <li><strong>Tabela única:</strong> tudo que a coleta traz é gravado em <code>public.cotacoes</code>, com a fonte, o mercado, o preço e a hora da coleta.</li>
                         <li><strong>Site lê do banco:</strong> a página de cotações mostra só o que está publicado, com a fonte e o horário de cada número.</li>
-                        <li><strong>Sem número inventado:</strong> se a fonte falhar, a cotação antiga continua no ar com o horário dela — nada é estimado.</li>
+                        <li><strong>Sem número inventado:</strong> se a fonte falhar, a cotação antiga continua no ar com o horário dela — nada é estimado. E, se a fonte responder pela metade, nada sai do ar.</li>
                     </ul>
                     <p class="rotacao-nota">
                         O status de cada fonte (ok, erro ou pendente) fica na tabela abaixo. Uma fonte com erro
@@ -463,7 +465,13 @@
                 <div class="panel-box">
                     <div class="panel-head">
                         <h2>Fontes consultadas</h2>
+                        <div class="panel-actions">
+                            <button type="button" class="btn primary small" id="cotAtualizarButton">
+                                Atualizar cotações agora
+                            </button>
+                        </div>
                     </div>
+                    <p class="rotacao-nota" id="cotAtualizarAviso" hidden></p>
                     <div class="table-wrap">
                         <table class="data-table">
                             <thead>

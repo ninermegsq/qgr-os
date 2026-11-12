@@ -18,7 +18,10 @@
  *   npm run cotacoes:coletar                   (o mesmo, pelo npm)
  *
  * CREDENCIAIS (necessárias para gravar; no --dry-run não são pedidas)
- *   QG_ADMIN_EMAIL + QG_ADMIN_PASSWORD  (variáveis de ambiente)
+ *   QG_SUPABASE_SERVICE_ROLE  (preferida) chave service role do
+ *                              Supabase: grava direto, sem depender
+ *                              da senha do painel
+ *   QG_ADMIN_EMAIL + QG_ADMIN_PASSWORD  (reserva: login no painel)
  *   ou um arquivo .qg-admin.json na raiz:  {"email":"...","password":"..."}
  *   (esse arquivo NÃO deve ir para o Git)
  *
@@ -58,6 +61,10 @@ const CONFIG = {
     url: URL_PADRAO,
     anonKey: '',
 
+    /* Chave service role do Supabase (secret). Quando existe, o
+       coletor grava direto, sem depender da senha do painel. */
+    serviceRole: (process.env.QG_SUPABASE_SERVICE_ROLE || '').trim(),
+
     imeaBase: (process.env.QG_IMEA_BASE || 'https://api1.imea.com.br/api/v2/mobile')
         .replace(/\/+$/, ''),
 
@@ -96,6 +103,11 @@ function valorArgumento(nome) {
 const DRY_RUN = temArgumento('--dry-run') || temArgumento('--sql');
 const DEBUG = temArgumento('--debug');
 const MANTER_ANTIGAS = temArgumento('--manter-antigas');
+
+/* Trava de lote parcial: se a fonte responder com menos da metade do
+   que ja esta publicado, nenhuma cotacao sai do ar. (Ajuste com
+   QG_LOTE_PARCIAL: 0.5 = metade.) */
+const FRAZAO_LOTE_PARCIAL = Number(process.env.QG_LOTE_PARCIAL || 0.5);
 const SOMENTE = valorArgumento('--somente')
     .split(',')
     .map(item => item.trim())
@@ -542,6 +554,7 @@ async function coletarImea() {
         nome: 'IMEA',
         url: CONFIG.imeaBase + '/cadeias',
         itens: itens,
+        parcial: mensagens.length > 0 && itens.length > 0,
         erro: itens.length ? null : (mensagens.join(' | ') || 'nenhuma cotacao reconhecida na resposta')
     };
 }
@@ -753,6 +766,7 @@ async function coletarGraoDireto() {
         nome: 'Grão Direto',
         url: 'https://www.graodireto.com.br/quotations/',
         itens: itens,
+        parcial: mensagens.length > 0 && itens.length > 0,
         erro: itens.length ? null : (mensagens.join(' | ') || 'nenhuma cotacao reconhecida')
     };
 }
@@ -1011,6 +1025,7 @@ async function coletarInvesting() {
         nome: 'Investing.com',
         url: 'https://www.investing.com',
         itens: itens,
+        parcial: mensagens.length > 0 && itens.length > 0,
         erro: itens.length ? null : (mensagens.join(' | ') || 'nenhuma cotacao reconhecida')
     };
 }
@@ -1071,11 +1086,19 @@ function rodarPython(requisicoes) {
  * ------------------------------------------------------------------ */
 
 async function tokenAdmin() {
+    /* 1. Service role key: e o caminho preferido. Nao depende de
+       senha, entao trocar a senha do painel nao quebra a coleta. */
+    if (CONFIG.serviceRole) {
+        return { token: CONFIG.serviceRole, apikey: CONFIG.serviceRole, tipo: 'service_role' };
+    }
+
+    /* 2. Reserva: login do administrador no painel. */
     const credenciais = credenciaisAdmin();
 
     if (!credenciais) {
         throw new Error(
-            'Sem credenciais de administrador. Defina QG_ADMIN_EMAIL e QG_ADMIN_PASSWORD ' +
+            'Sem credenciais para gravar. Defina QG_SUPABASE_SERVICE_ROLE ' +
+            '(recomendado) ou QG_ADMIN_EMAIL e QG_ADMIN_PASSWORD ' +
             '(ou crie o arquivo .qg-admin.json na raiz) e rode de novo.'
         );
     }
@@ -1097,26 +1120,26 @@ async function tokenAdmin() {
             ((dados && (dados.msg || dados.error_description || dados.message)) || resposta.status));
     }
 
-    return dados.access_token;
+    return { token: dados.access_token, apikey: CONFIG.anonKey, tipo: 'admin' };
 }
 
-function cabecalhosAdmin(token, extra) {
+function cabecalhosAdmin(credencial, extra) {
     return Object.assign({
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        apikey: CONFIG.anonKey,
-        Authorization: 'Bearer ' + token
+        apikey: credencial.apikey,
+        Authorization: 'Bearer ' + credencial.token
     }, extra || {});
 }
 
-async function gravarCotacoes(token, itens) {
+async function gravarCotacoes(credencial, itens) {
     if (!itens.length) return 0;
 
     const resposta = await fetch(
         CONFIG.url + '/rest/v1/cotacoes?on_conflict=fonte,simbolo',
         {
             method: 'POST',
-            headers: cabecalhosAdmin(token, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
+            headers: cabecalhosAdmin(credencial, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
             body: JSON.stringify(itens)
         }
     );
@@ -1129,10 +1152,24 @@ async function gravarCotacoes(token, itens) {
     return itens.length;
 }
 
-async function despublicarAntigas(token, fonte, itens) {
+async function contarPublicadas(credencial, fonte) {
+    const resposta = await fetch(
+        CONFIG.url + '/rest/v1/cotacoes?select=id&fonte=eq.' + encodeURIComponent(fonte) +
+        '&publicado=eq.true&limit=1000',
+        { headers: cabecalhosAdmin(credencial) }
+    );
+
+    if (!resposta.ok) return -1;
+
+    const linhas = await resposta.json();
+
+    return Array.isArray(linhas) ? linhas.length : -1;
+}
+
+async function despublicarAntigas(credencial, fonte, itens) {
     const existentes = await fetch(
         CONFIG.url + '/rest/v1/cotacoes?select=id,simbolo&fonte=eq.' + encodeURIComponent(fonte),
-        { headers: cabecalhosAdmin(token) }
+        { headers: cabecalhosAdmin(credencial) }
     );
 
     if (!existentes.ok) return 0;
@@ -1154,7 +1191,7 @@ async function despublicarAntigas(token, fonte, itens) {
         CONFIG.url + '/rest/v1/cotacoes?id=in.(' + ids.join(',') + ')',
         {
             method: 'PATCH',
-            headers: cabecalhosAdmin(token, { Prefer: 'return=minimal' }),
+            headers: cabecalhosAdmin(credencial, { Prefer: 'return=minimal' }),
             body: JSON.stringify({ publicado: false })
         }
     );
@@ -1162,13 +1199,13 @@ async function despublicarAntigas(token, fonte, itens) {
     return resposta.ok ? ids.length : 0;
 }
 
-async function gravarFonte(token, resultado) {
+async function gravarFonte(credencial, resultado) {
     const linha = {
         fonte: resultado.fonte,
         nome: resultado.nome,
         url: resultado.url,
         status: resultado.erro ? 'erro' : 'ok',
-        mensagem: resultado.erro ? String(resultado.erro).slice(0, 500) : null,
+        mensagem: resultado.mensagem || (resultado.erro ? String(resultado.erro).slice(0, 500) : null),
         itens: resultado.itens.length,
         coletado_em: new Date().toISOString()
     };
@@ -1177,7 +1214,7 @@ async function gravarFonte(token, resultado) {
         CONFIG.url + '/rest/v1/cotacoes_fontes?on_conflict=fonte',
         {
             method: 'POST',
-            headers: cabecalhosAdmin(token, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
+            headers: cabecalhosAdmin(credencial, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
             body: JSON.stringify([linha])
         }
     );
@@ -1239,7 +1276,8 @@ function gerarSql(itens, resultados) {
             nome: resultado.nome,
             url: resultado.url,
             status: resultado.erro ? 'erro' : 'ok',
-            mensagem: resultado.erro ? resultado.erro : null,
+            mensagem: resultado.mensagem ||
+                (resultado.erro ? String(resultado.erro) : null),
             itens: resultado.itens.length,
             coletado_em: new Date().toISOString()
         };
@@ -1364,16 +1402,40 @@ async function principal() {
         return;
     }
 
-    const token = await tokenAdmin();
+    const credencial = await tokenAdmin();
 
-    const gravadas = await gravarCotacoes(token, todas);
+    const gravadas = await gravarCotacoes(credencial, todas);
     console.log('  Gravadas no banco: ' + gravadas + ' cotacao(oes).');
 
     if (!MANTER_ANTIGAS) {
         for (const resultado of resultados) {
             if (resultado.erro) continue;
 
-            const despublicadas = await despublicarAntigas(token, resultado.fonte, resultado.itens);
+            /* Trava de lote parcial.
+               *
+               * Se a fonte respondeu com bem menos itens do que esta
+               * publicado hoje, o desconfiado e a resposta truncada
+               * (a fonte caiu no meio, veio paginada, o HTML mudou).
+               * Nesse caso nada sai do ar: as cotacoes antigas ficam
+               * com o horario delas ate a proxima coleta completa. */
+            const publicadas = await contarPublicadas(credencial, resultado.fonte);
+            const minimo = Math.floor(publicadas * FRAZAO_LOTE_PARCIAL);
+
+            const loteParcial = publicados > 0 && resultado.itens.length < minimo;
+
+            if (loteParcial || resultado.parcial) {
+                const motivo = loteParcial
+                    ? 'lote parcial (' + resultado.itens.length + ' de ' + publicadas + ' publicadas)'
+                    : 'algumas respostas da fonte falharam';
+
+                resultado.mensagem = 'Coleta com ' + motivo +
+                    ': as cotacoes antigas foram mantidas no ar.';
+
+                console.log('  ' + resultado.nome + ': ' + resultado.mensagem);
+                continue;
+            }
+
+            const despublicadas = await despublicarAntigas(credencial, resultado.fonte, resultado.itens);
 
             if (despublicadas) {
                 console.log('  ' + resultado.nome + ': ' + despublicadas +
@@ -1383,7 +1445,7 @@ async function principal() {
     }
 
     for (const resultado of resultados) {
-        await gravarFonte(token, resultado);
+        await gravarFonte(credencial, resultado);
     }
 
     console.log('  Estado das fontes atualizado no painel.\n');

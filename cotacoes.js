@@ -820,9 +820,31 @@
             .then(linhas => {
                 cotacoes = classificar(Array.isArray(linhas) ? linhas : []);
 
+                /* Nada mudou desde a ultima vez: nao redesenha a
+                   grade (o leitor nao perde o que ja estava
+                   carregando). */
+                const assinatura = assinaturaDasCotacoes(cotacoes);
+
+                if (assinatura && assinatura === assinaturaAtual) return cotacoes;
+
+                assinaturaAtual = assinatura;
+
+                /* Quantas cotacoes estavam na tela: ao redesenhar, a
+                   grade volta para o primeiro bloco. */
+                const visiveisAntes = cotacoesVisiveis;
+
                 atualizarResumoHero(cotacoes);
                 montarChips();
                 desenharGrade();
+
+                /* Devolve o leitor ao bloco em que ele estava (o
+                   "carregar mais" continua valendo depois da
+                   atualizacao). */
+                const alvo = Math.min(visiveisAntes, cotacoesFiltradas().length);
+
+                while (cotacoesVisiveis < alvo) {
+                    carregarMaisCotacoes();
+                }
 
                 return cotacoes;
             })
@@ -835,6 +857,51 @@
 
                 return [];
             });
+    }
+
+    /* --------------------------------------------------------------
+     * Atualizacao automatica
+     * --------------------------------------------------------------
+     * A coleta roda no servidor (GitHub Actions). A pagina so le o
+     * banco: de tempos em tempos ela pergunta de novo para o leitor
+     * ver o preco novo sem precisar recarregar a pagina.
+     *
+     * De quanto em quanto: 5 minutos. E o mesmo intervalo do painel
+     * do GitHub: se o preco mudou no servidor, a aba aberta mostra
+     * em poucos minutos.
+     *
+     * A aba parada (escondida) nao gasta consulta: o relogio so
+     * roda quando a aba esta a vista. */
+
+    const INTERVALO_ATUALIZACAO_MS = 5 * 60 * 1000;
+
+    /* Assinatura do que esta na tela: serve para saber se algo
+       mudou de verdade antes de redesenhar a grade. */
+    let assinaturaAtual = '';
+
+    function assinaturaDasCotacoes(lista) {
+        return (lista || []).map(item => [
+            item.simbolo || '',
+            item.preco === null || item.preco === undefined ? '' : item.preco,
+            item.atualizado_em || ''
+        ].join(':')).join('|');
+    }
+
+    function iniciarAtualizacaoAutomatica() {
+        if (typeof window.setInterval !== 'function') return;
+
+        window.setInterval(() => {
+            if (document.hidden) return;
+
+            carregarCotacoes();
+        }, INTERVALO_ATUALIZACAO_MS);
+
+        /* Volta para a aba: confere se ha preco novo na hora. */
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) return;
+
+            carregarCotacoes();
+        });
     }
 
     /* --------------------------------------------------------------
@@ -855,6 +922,7 @@
         prepararFiltro('cotChipsEstado', 'uf');
         prepararBotaoMais();
         carregarCotacoes();
+        iniciarAtualizacaoAutomatica();
     }
 
     if (document.readyState === 'loading') {

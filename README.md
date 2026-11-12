@@ -546,9 +546,65 @@ node tools/coletar-cotacoes.js --dry-run --sql   # imprime o SQL pronto (formato
 - O SQL impresso usa `jsonb_to_recordset` + `ON CONFLICT` — é o formato aceito pelo SQL Editor
   do Supabase e pelas ferramentas de migração (um `VALUES` com muitas linhas não é interpretado).
 
+### Coleta automática (GitHub Actions)
+
+A coleta não depende de ninguém: ela roda sozinha no repositório, pela workflow
+`.github/workflows/cotacoes.yml` (nome: **Atualizar cotações**).
+
+| Quando | De quanto em quanto |
+| --- | --- |
+| Segunda a sexta, das 8h às 17h45 (horário de Mato Grosso) | 15 minutos |
+| Fora desse período (noite, sábado e domingo) | 2 horas |
+
+**Por que 15 minutos e não 5:** preço físico de grão não muda a cada 5 minutos. O IMEA publica
+1 a 2 vezes por dia e o Investing.com só anda junto com o mercado. O ciclo de 15 minutos dentro
+do expediente é o que pega o preço novo logo depois da divulgação, sem gastar runner à toa.
+
+**Três formas de disparar:**
+
+1. **Sozinho**, pelo `schedule` da workflow (é o padrão);
+2. **Na mão**, pelo botão **Run workflow** na aba *Actions* do GitHub (útil para conferir se
+   está funcionando);
+3. **Pelo painel do site** (`/admin/` → aba **Cotações** → **Atualizar cotações agora**), que
+   pede ao servidor que rode a mesma coleta na hora.
+
+**Segredos do repositório** (*Settings → Secrets and variables → Actions*):
+
+| Segredo | Para que serve |
+| --- | --- |
+| `QG_SUPABASE_SERVICE_ROLE` | chave service role do Supabase: é o que o coletor usa para gravar. **É ela que deve ser usada** — assim, trocar a senha do painel não quebra a coleta |
+| `QG_ADMIN_EMAIL` | reserva: se a service role não existir, o coletor entra no painel com este e-mail |
+| `QG_ADMIN_PASSWORD` | reserva: a senha do administrador, para o caso acima |
+
+Nenhum desses segredos vai para o Git. O `tools/verify.js` confere que nenhum deles aparece
+no código versionado.
+
+**O botão do painel sem segredo no navegador:** o token do GitHub **não** fica no
+`admin/admin.js` (que é público). Quem guarda o token é a Edge Function
+`supabase/functions/cotacoes-trigger`, no servidor do Supabase. O painel só manda um POST
+autenticado; a função confere se quem chamou é administrador e só então dispara a workflow
+(`repository_dispatch`). As secrets da função:
+
+| Secret | Para que serve |
+| --- | --- |
+| `QG_GITHUB_TOKEN` | token do GitHub com escopo `repo` (ou fine-grained, só neste repositório) |
+| `QG_GITHUB_OWNER` | dono do repositório (`ninermegsq`) |
+| `QG_GITHUB_REPO` | nome do repositório (`qgr-os`) |
+| `QG_GITHUB_WORKFLOW` | arquivo da workflow (`cotacoes.yml`) |
+
+**A trava de lote parcial:** se a fonte responder com menos da metade do que já está publicado
+(a fonte caiu no meio, veio paginada, o HTML mudou), **nenhuma cotação sai do ar** — as antigas
+continuam publicadas com o horário delas. O mesmo vale quando só *algumas* respostas da fonte
+falham: o coletor publica o que veio e mantém o resto. É o que impede que uma falha de rede
+apague o preço do dia. O corte é configurável em `QG_LOTE_PARCIAL` (padrão `0.5`).
+
+**O que o leitor vê:** a página `/cotacoes.html` pergunta o banco de novo a cada 5 minutos
+(enquanto a aba está à vista) e redesenha a grade só quando algum número mudou de verdade.
+
 **No painel** (`/admin/`), a aba **Cotações** mostra a tabela toda (fonte, mercado, produto,
 preço, variação, data), o estado de cada fonte e deixa **publicar**, **despublicar** e **excluir**
-linha por linha.
+linha por linha. O botão **Atualizar cotações agora** dispara a coleta (veja
+*Coleta automática* abaixo).
 
 **Na página:** três filtros que se combinam — **mercado**, **produto** e **estado** — com a
 escolha no endereço (`?mercado=regional&produto=soja&uf=MT`), "carregar mais" (24 por vez) e,
@@ -652,7 +708,16 @@ Depois de publicar:
    Sem imagem, o site mostra o ícone de muda em vez de um espaço quebrado.
 8. **Publicar a Edge Function** — `supabase functions deploy noticias` (opcional: o site
    funciona sem ela).
-9. **Primeiro anúncio (opcional)** — a aba “Anúncios” publica espaços patrocinados. Antes,
+9. **Publicar a Edge Function da coleta** — `supabase functions deploy cotacoes-trigger` e
+   cadastrar as secrets `QG_GITHUB_TOKEN`, `QG_GITHUB_OWNER`, `QG_GITHUB_REPO` e
+   `QG_GITHUB_WORKFLOW` (*Edge Functions → Secrets*). É o que faz o botão
+   **Atualizar cotações agora** do painel funcionar. Sem ela, a coleta automática
+   (GitHub Actions) continua funcionando normalmente.
+10. **Cadastrar o segredo da coleta no GitHub** — *Settings → Secrets and variables → Actions*:
+   `QG_SUPABASE_SERVICE_ROLE` (a chave service role do Supabase, em
+   *Project Settings → API Keys*). É o único segredo obrigatório para a coleta automática
+   rodar; `QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD` são só a reserva.
+11. **Primeiro anúncio (opcional)** — a aba “Anúncios” publica espaços patrocinados. Antes,
    combine com o patrocinador a posição (lista de notícias ou fim da matéria), o prazo de
    veiculação, o **peso no rodízio** (a participação dele no revezamento) e a autorização por
    escrito (Lei 9.279/1996, art. 37): o painel exige o campo “Autorizado por” para o anúncio

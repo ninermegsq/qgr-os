@@ -187,6 +187,16 @@
             });
         },
 
+        /* Chama uma Edge Function do Supabase usando a sessao do
+           painel (o token de sessao vai no Authorization). */
+        invokeFunction: function (nome, body, extraHeaders) {
+            return request('/functions/v1/' + nome, {
+                method: 'POST',
+                headers: extraHeaders,
+                body: body || {}
+            });
+        },
+
         /* ---------- Autenticação ---------- */
 
         signIn: async function (email, password) {

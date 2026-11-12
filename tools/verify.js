@@ -1136,6 +1136,74 @@ if (!sitemap.includes('cotacoes.html')) {
 notes.push('Area de cotacoes: pagina, filtro por mercado, painel e coletor conferidos');
 notes.push('Privacidade das cotacoes: o publico ve so o que esta publicado; o estado das fontes e do painel');
 
+/* ---------- 30. Coleta automatica das cotacoes ---------- */
+const workflowCotacoes = read('.github/workflows/cotacoes.yml');
+const funcaoCotacoes = read('supabase/functions/cotacoes-trigger/index.ts');
+
+/* A workflow existe, roda por schedule e pode ser disparada na mao */
+if (!/schedule:/.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml sem schedule (a coleta tem de rodar sozinha)');
+}
+if (!/cron:/.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml sem cron');
+}
+if (!/workflow_dispatch:/.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml sem workflow_dispatch (rodar a mao)');
+}
+if (!/repository_dispatch:/.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml sem repository_dispatch (o botao do painel dispara por aqui)');
+}
+if (!/tools\/coletar-cotacoes\.js/.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml sem rodar o coletor (tools/coletar-cotacoes.js)');
+}
+if (!/curl_cffi/.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml sem instalar o curl_cffi (o Investing.com exige)');
+}
+if (!/QG_SUPABASE_SERVICE_ROLE/.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml sem o segredo QG_SUPABASE_SERVICE_ROLE');
+}
+if (SECRET_PATTERN.test(workflowCotacoes)) {
+    errors.push('.github/workflows/cotacoes.yml com chave secreta embutida (use secrets)');
+}
+
+/* O botao do painel dispara a coleta pelo servidor */
+if (!/cotAtualizarButton/.test(adminHtml)) {
+    errors.push('admin/index.html sem o botao de atualizar as cotacoes (#cotAtualizarButton)');
+}
+if (!/invokeFunction\('cotacoes-trigger'/.test(adminJs)) {
+    errors.push('admin/admin.js sem chamar a Edge Function cotacoes-trigger');
+}
+if (!/invokeFunction/.test(read('supabase-api.js'))) {
+    errors.push('supabase-api.js sem o metodo invokeFunction (chamar Edge Function)');
+}
+
+/* O token do GitHub fica na Edge Function, nunca no codigo do navegador */
+if (!/QG_GITHUB_TOKEN/.test(funcaoCotacoes)) {
+    errors.push('supabase/functions/cotacoes-trigger/index.ts sem ler o token do GitHub (QG_GITHUB_TOKEN)');
+}
+if (!/administradores/.test(funcaoCotacoes)) {
+    errors.push('supabase/functions/cotacoes-trigger/index.ts sem conferir se quem chama e administrador');
+}
+if (/QG_GITHUB_TOKEN\s*=\s*['"][^'"]+['"]/.test(adminJs)) {
+    errors.push('admin/admin.js com token do GitHub embutido (o painel e publico)');
+}
+if (SECRET_PATTERN.test(funcaoCotacoes)) {
+    errors.push('supabase/functions/cotacoes-trigger/index.ts com chave secreta embutida (use secrets)');
+}
+
+/* A trava de lote parcial: fonte truncada nao tira cotacao do ar */
+if (!/FRAZAO_LOTE_PARCIAL/.test(coletor)) {
+    errors.push('tools/coletar-cotacoes.js sem a trava de lote parcial (lote parcial nao despublica)');
+}
+
+/* A pagina pergunta o banco de novo (a aba aberta acompanha a coleta) */
+if (!/setInterval/.test(cotacoesJs)) {
+    errors.push('cotacoes.js sem atualizar os numeros sozinho (setInterval)');
+}
+
+notes.push('Coleta automatica: workflow com schedule, execucao manual e disparo pelo painel conferidas');
+notes.push('Segredos: o token do GitHub fica na Edge Function, nunca no codigo do navegador');
+
 /* ---------- Relatorio ---------- */
 function report() {
     console.log('');

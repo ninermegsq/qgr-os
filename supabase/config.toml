@@ -6,3 +6,8 @@ project_id = "rppoiwrbxqdbtavhgdjk"
 [functions.noticias]
 # O feed e publico: a RLS do banco garante que so sai noticia publicada.
 verify_jwt = false
+
+[functions.cotacoes-trigger]
+# Exige sessao: so quem esta autenticado chega ate a funcao, e ela
+# ainda confere se o usuario e administrador antes de disparar a coleta.
+verify_jwt = true

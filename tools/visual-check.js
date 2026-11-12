@@ -950,29 +950,56 @@ async function verificarPainelAdmin(browser, report) {
             // proprio navegador de teste (localStorage "qg_visitante").
             // Apagar so essas linhas mantem o painel limpo sem tocar nas
             // visitas de quem usa o site de verdade.
-            const idsVisitantes = Array.from(VISITANTES_TESTE);
-
+            //
             // Apaga as visitas de TODAS as paginas abertas nesta
             // verificacao (cada pagina pode ter gerado um identificador
             // de visitante diferente).
+            //
+            // O evento de analytics e enviado sem esperar a resposta: uma
+            // visita pode chegar ao banco DEPOIS desta limpeza (a pagina
+            // ja foi fechada com o fetch a caminho). Por isso a limpeza
+            // roda em varias passadas, com uma pausa entre elas, e so
+            // para quando nao sobra nenhuma linha de teste.
+            const idsVisitantes = Array.from(VISITANTES_TESTE);
+
             const limpezaVisitas = await page.evaluate(async (ids) => {
                 if (!window.QGSupabase) return { apagadas: 0, erro: 'cliente do Supabase ausente' };
 
                 let apagadas = 0;
+                let tentativas = 0;
+
+                const apagar = async (filtro) => {
+                    const antes = await window.QGSupabase.select('visitas', 'select=id&' + filtro);
+                    if (!antes || !antes.length) return 0;
+                    await window.QGSupabase.remove('visitas', filtro);
+                    return antes.length;
+                };
 
                 try {
-                    for (const id of ids) {
-                        const filtro = 'visitante_id=eq.' + encodeURIComponent(id);
-                        const antes = await window.QGSupabase.select('visitas', 'select=id&' + filtro);
+                    // Passadas: a ultima confere se sobrou alguma coisa.
+                    while (tentativas < 4) {
+                        tentativas += 1;
 
-                        if (!antes || !antes.length) continue;
+                        let nesta = 0;
 
-                        await window.QGSupabase.remove('visitas', filtro);
+                        for (const id of ids) {
+                            nesta += await apagar('visitante_id=eq.' + encodeURIComponent(id));
+                        }
 
-                        apagadas += antes.length;
+                        // Rede de seguranca: apaga tambem as visitas que
+                        // vieram do servidor local (referrer 127.0.0.1),
+                        // mesmo que o identificador de visitante nao tenha
+                        // sido capturado a tempo.
+                        nesta += await apagar('referrer=like.*127.0.0.1*');
+
+                        apagadas += nesta;
+
+                        if (!nesta) break;
+
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                     }
 
-                    return { apagadas: apagadas };
+                    return { apagadas: apagadas, tentativas: tentativas };
                 } catch (erro) {
                     return { apagadas: apagadas, erro: String((erro && erro.message) || erro) };
                 }

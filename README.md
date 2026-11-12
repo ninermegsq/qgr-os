@@ -163,7 +163,10 @@ O que ele verifica, em `/`, `/noticias.html`, `/noticia.html?id=…`, `/noticias
   e as cinco abas (Resumo, Notícias, Anúncios, Leads, Visitas) carregando os dados sem erro.
 
 O teste do painel apaga no final o lead e as visitas que ele mesmo criou, para não
-sujar o painel de quem usa o site.
+sujar o painel de quem usa o site. A limpeza das visitas roda em várias passadas
+(esperando os eventos que ainda estavam a caminho) e apaga também as visitas cujo
+`referrer` aponta para o servidor local (`127.0.0.1`) — o que o navegador de teste
+deixa para trás. Visita de visitante real, com `referrer` externo, nunca é apagada.
 
 Saídas:
 

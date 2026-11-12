@@ -148,7 +148,7 @@ serve(async (request: Request) => {
   const eAdmin =
     Array.isArray(administradores) &&
     administradores.length > 0 &&
-    administradores[0].ativo !== false;
+    administradores[0].ativo === true;
 
   if (!eAdmin) {
     return json({ erro: "sem_permissao" }, 403);

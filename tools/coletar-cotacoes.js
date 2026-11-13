@@ -1427,7 +1427,7 @@ async function principal() {
             const publicadas = await contarPublicadas(credencial, resultado.fonte);
             const minimo = Math.floor(publicadas * FRAZAO_LOTE_PARCIAL);
 
-            const loteParcial = publicados > 0 && resultado.itens.length < minimo;
+            const loteParcial = publicadas > 0 && resultado.itens.length < minimo;
 
             if (loteParcial || resultado.parcial) {
                 const motivo = loteParcial

@@ -231,6 +231,7 @@ npm run sitemap
 | `admin/admin.js` | Lógica do painel (login, CRUD de notícias, de cotações e de anúncios, status de lead, CSV, gráficos) |
 | `supabase/migrations/20260101000000_qg_init.sql` | Schema do banco: tabelas, RLS, RPC públicas e vistas do painel |
 | `supabase/migrations/20261112103000_qg_cotacoes_produto_uf.sql` | Colunas `produto_chave` e `uf` da tabela `cotacoes` (filtros de produto e de estado), com índice e o preenchimento das cotações publicadas |
+| `supabase/migrations/20261113120000_qg_dia_cota_anuncios_fuso_site.sql` | A cota diária de impressões, a RPC `anuncios_elegiveis`, a `registrar_impressao_anuncio` e a view `vw_anuncios_desempenho` passam a contar o dia de Mato Grosso (o dia do site) e não o dia UTC do Postgres |
 | `supabase/migrations/20261113140000_qg_revoca_vistas_painel_anon.sql` | Revoga das seis vistas do painel o privilégio padrão `SELECT ... TO PUBLIC` (é o que entregava os números do painel à chave pública) e o papel `anon` |
 | `supabase/migrations/20261113150000_qg_vistas_dia_site.sql` | Faz `vw_leads_por_dia` e `vw_visitas_por_dia` agruparem pelo dia de Mato Grosso (o site), e não pelo dia UTC do Postgres |
 | `supabase/functions/noticias/index.ts` | Edge Function `noticias` (feed público com cache) |
@@ -409,15 +410,18 @@ O arquivo `supabase/migrations/20260101000000_qg_init.sql` cria tudo:
 Aplique no **SQL Editor** do Supabase Dashboard (ou via `supabase db push`) colando o
 conteúdo do arquivo. O script é idempotente: pode rodar de novo sem erro.
 
-> Neste projeto as migrations **já estão aplicadas** no banco `rppoiwrbxqdbtavhgdjk`.
-> O histórico completo (com o que cada uma faz) está em `supabase/migrations/README.md`.
+> Neste projeto as migrations **já estão aplicadas** no banco `rppoiwrbxqdbtavhgdjk`,
+> com exceção das três mais recentes (13/11/2026). O histórico completo (com o que cada
+> uma faz) está em `supabase/migrations/README.md`.
 >
-> ⚠️ **Duas migrations ainda não aplicadas no banco** (13/11/2026): as que revogam das
-> vistas do painel o acesso da chave pública (`20261113140000`) e as que agrupam o
-> gráfico por dia de Mato Grosso (`20261113150000`). Elas estão prontas e versionadas,
-> mas o CLI do Supabase não está autenticado nesta máquina. Aplique-as no **SQL Editor**
-> do Dashboard (ou com `supabase db push`) antes de publicar: até lá, a chave pública
-> continua lendo `vw_painel_resumo` e o gráfico do painel agrupa pelo dia UTC.
+> ⚠️ **Três migrations ainda não aplicadas no banco** (13/11/2026):
+> `20261113120000` (cota diária no dia do site), `20261113140000` (revoga das vistas do
+> painel o acesso da chave pública) e `20261113150000` (gráfico do painel agrupado pelo dia
+> de Mato Grosso). Elas estão prontas e versionadas, mas o CLI do Supabase não está
+> autenticado nesta máquina e a senha do banco não está disponível aqui. Aplique-as no
+> **SQL Editor** do Dashboard (ou com `supabase db push`) antes de publicar: até lá, a
+> chave pública continua lendo `vw_painel_resumo`, o gráfico do painel agrupa pelo dia UTC
+> e a cota diária de anúncios reinicia às 20h (horário de Brasília) em vez de à meia-noite.
 
 ### 2. A chave pública (já preenchida)
 

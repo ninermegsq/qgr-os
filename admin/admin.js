@@ -63,6 +63,10 @@
     /* Limite do resumo: o banco recusa textos maiores (CHECK de 320) */
     const LIMITE_RESUMO = 320;
 
+    /* Limite do titulo: o banco recusa titulos maiores
+       (CHECK char_length(titulo) BETWEEN 3 AND 220) */
+    const LIMITE_TITULO = 220;
+
     const ROTULO_CATEGORIA = {
         Geral: 'Geral',
         Soja: 'Soja',
@@ -544,6 +548,16 @@
 
         if (dados.titulo.length < 3) {
             mostrarAlerta(alerta, 'O título precisa de pelo menos 3 caracteres.');
+            botao.disabled = false;
+            return;
+        }
+
+        /* O banco recusa titulo com mais de 220 caracteres: avisamos
+           aqui para o painel nao mostrar um erro cru do banco. */
+        if (dados.titulo.length > LIMITE_TITULO) {
+            mostrarAlerta(alerta,
+                'O título tem ' + dados.titulo.length + ' caracteres. O limite é ' +
+                LIMITE_TITULO + '.');
             botao.disabled = false;
             return;
         }
@@ -1302,8 +1316,17 @@
             lead.status
         ]);
 
+        /* Cada celula vai entre aspas (aspas duplas escapadas) e, se
+           comecar com = + - @, ganha um apostrofo na frente: sem isso o
+           Excel/LibreOffice trata o texto do lead como formula e
+           executa no arquivo que o administrator abrir. */
         function celula(valor) {
-            const texto = valor === null || valor === undefined ? '' : String(valor);
+            let texto = valor === null || valor === undefined ? '' : String(valor);
+
+            if (/^[=+\-@\t\r]/.test(texto)) {
+                texto = "'" + texto;
+            }
+
             return '"' + texto.replace(/"/g, '""') + '"';
         }
 

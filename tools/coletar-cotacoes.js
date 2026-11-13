@@ -1404,7 +1404,23 @@ async function principal() {
     }
 
     if (!todas.length) {
-        console.log('  Nada para gravar. As fontes continuam com o que ja estava no ar.\n');
+        /* Nenhuma fonte entregou item: se alguma fonte falhou de verdade,
+           a coleta nao foi-sucesso. O codigo de saida diferente de zero
+           faz a workflow do GitHub marcar o job como falha, em vez de
+           deixar o preco velho no ar fingindo que deu tudo certo. */
+        const comErro = resultados.filter(resultado => resultado.erro);
+        const relatorio = comErro.length
+            ? comErro.map(resultado =>
+                (resultado.nome || resultado.fonte || 'fonte') + ': ' + resultado.erro).join(' | ')
+            : 'as fontes nao devolveram nenhuma cotacao';
+
+        console.error('  [ERRO] Nada para gravar. ' + relatorio);
+        console.error('  As fontes continuam com o que ja estava no ar.\n');
+
+        if (comErro.length) {
+            process.exitCode = 1;
+        }
+
         return;
     }
 

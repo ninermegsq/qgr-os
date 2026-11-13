@@ -98,6 +98,12 @@
         const erro = byId('noticiaErro');
         const conteudo = byId('noticiaConteudo');
 
+        /* A pagina sem materia nao entra no indice: sem isso o Google
+           indexaria uma pagina fina para cada id inventado (soft 404).
+           O canonical vai para a listagem, que e o conteudo real. */
+        definirMeta('name', 'robots', 'noindex, follow');
+        definirCanonical(SITE_URL + '/noticias.html');
+
         if (conteudo) conteudo.hidden = true;
         if (!erro) return;
 
@@ -395,14 +401,18 @@
         const id = encodeURIComponent(noticia.id);
         const categoria = encodeURIComponent(noticia.categoria || 'Geral');
 
+        /* O id no fim da ordenacao e o desempate: duas noticias publicadas
+           no mesmo instante nao podem trocar de lugar entre a consulta
+           da categoria e a dos recentes (mesma regra da listagem e da
+           Edge Function). */
         const daCategoria = SUPABASE.select('noticias',
             'select=' + campos + '&publicado=eq.true&id=neq.' + id +
             '&categoria=eq.' + categoria +
-            '&order=publicado_em.desc&limit=3');
+            '&order=publicado_em.desc,id.desc&limit=3');
 
         const recentes = SUPABASE.select('noticias',
             'select=' + campos + '&publicado=eq.true&id=neq.' + id +
-            '&order=publicado_em.desc&limit=6');
+            '&order=publicado_em.desc,id.desc&limit=6');
 
         return Promise.all([daCategoria, recentes])
             .then(function (respostas) {

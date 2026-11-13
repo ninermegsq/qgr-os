@@ -1335,6 +1335,53 @@ if (!/setInterval/.test(cotacoesJs)) {
 notes.push('Coleta automatica: workflow com schedule, execucao manual e disparo pelo painel conferidas');
 notes.push('Segredos: o token do GitHub fica na Edge Function, nunca no codigo do navegador');
 
+/* ---------- 34. Defeitos corrigidos: travas que nao podem voltar ---------- */
+/* Cada item abaixo ja foi um defeito real do projeto. As checagens
+   existem para impedir que a correcao se perca num merge futuro. */
+
+/* O CSV dos leads nao pode virar formula no Excel: nome, mensagem e
+   e-mail vem do formulario publico. */
+if (!/'\s*\+\s*texto/.test(adminJs)) {
+    errors.push('admin/admin.js sem neutralizar formula no CSV de leads (prefixo de = + - @)');
+}
+/* A lista de prefixos de formula fica entre colchetes: procuramos o
+   conjunto inteiro, sem depender de como a classe foi escapeada. */
+const classeFormula = adminJs.match(/\[[^\]\n]*=[^\]\n]*\+[^\]\n]*-[^\]\n]*@[^\]\n]*\]/);
+
+if (!classeFormula) {
+    errors.push('admin/admin.js sem a lista de prefixos de formula (= + - @) na exportacao CSV');
+} else if (!/\\t/.test(classeFormula[0]) || !/\\r/.test(classeFormula[0])) {
+    errors.push('admin/admin.js sem neutralizar formula no CSV quando a celula comecar com TAB ou CR');
+}
+
+/* O titulo da noticia tem 220 caracteres no banco: o painel avisa antes. */
+if (!/LIMITE_TITULO\s*=\s*220/.test(adminJs)) {
+    errors.push('admin/admin.js sem o limite de 220 caracteres no titulo da noticia');
+}
+if (!/dados\.titulo\.length\s*>\s*LIMITE_TITULO/.test(adminJs)) {
+    errors.push('admin/admin.js sem validar o tamanho do titulo antes de salvar a noticia');
+}
+
+/* A listagem de "mais noticias" precisa do desempate pelo id, como a
+   listagem e a Edge Function: sem isso duas materias do mesmo instante
+   trocam de lugar entre as duas consultas. */
+if (!/order=publicado_em\.desc,id\.desc/.test(noticiaJs)) {
+    errors.push('noticia.js sem o desempate id.desc na ordem de "mais noticias"');
+}
+
+/* A pagina da noticia sem materia precisa sair do indice (soft 404). */
+if (!/noindex, follow/.test(noticiaJs)) {
+    errors.push('noticia.js sem marcar noindex quando a noticia nao existe');
+}
+
+/* O coletor precisa falhar quando nenhuma fonte entrega item: a
+   workflow do GitHub le o codigo de saida. */
+if (!/process\.exitCode\s*=\s*1/.test(read('tools/coletar-cotacoes.js'))) {
+    errors.push('tools/coletar-cotacoes.js sem codigo de saida 1 quando nenhuma fonte entrega cotacao');
+}
+
+notes.push('Travas anti-regressao: CSV de lead sem formula, titulo de 220, ordem estavel e noindex da noticia');
+
 /* ---------- Relatorio ---------- */
 function report() {
     console.log('');

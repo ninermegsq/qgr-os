@@ -43,8 +43,10 @@ on:
     - cron: '*/15 12-21 * * 1-5'
     # Fora do expediente: de 2 em 2 horas, todo dia.
     - cron: '0 0,2,4,6,8,10,22 * * *'
-    # Sabado e domingo, de 2 em 2 horas, dentro do horario comercial.
-    - cron: '0 12,14,16,18,20 * * 6,7'
+    # Sabado (6) e domingo (0), de 2 em 2 horas, dentro do horario
+    # comercial. Atencao: o GitHub aceita de 0 a 6 no dia da semana
+    # (0 = domingo), e NAO aceita o valor 7. Por isso "0,6" e nao "6,7".
+    - cron: '0 12,14,16,18,20 * * 0,6'
 
   # Rodar na mao pelo painel do GitHub.
   workflow_dispatch:

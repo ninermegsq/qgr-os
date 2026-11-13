@@ -236,13 +236,49 @@
         }
     }
 
+    /* Converte o erro tecnico em algo que diz O QUE FALTOU.
+       O painel e do dono do negocio: mensagem util vale mais que
+       "HTTP 404". */
     function mensagemDeErro(erro) {
         const texto = (erro && erro.message) ? erro.message : 'Erro inesperado.';
 
         if (/invalid login credentials/i.test(texto)) {
             return 'E-mail ou senha inválidos.';
         }
-        if (/Failed to fetch|NetworkError|load failed/i.test(texto)) {
+
+        /* A Edge Function devolve { erro, mensagem } com o motivo. */
+        if (erro && erro.mensagem) {
+            return erro.mensagem;
+        }
+
+        const status = erro && erro.status ? Number(erro.status) : 0;
+        const funcao = erro && erro.funcao ? erro.funcao : '';
+        const codigo = erro && erro.codigo ? erro.codigo : '';
+
+        /* A funcao de disparo nao foi publicada no Supabase. */
+        if (status === 404 && funcao) {
+            return 'A Edge Function "' + funcao + '" ainda não foi publicada no Supabase. ' +
+                'Publique-a (Supabase > Edge Functions > cotacoes-trigger > Deploy) ' +
+                'e o botão passa a funcionar.';
+        }
+
+        if (status === 404) {
+            return 'A página ou a função pedida não existe no Supabase (404).';
+        }
+
+        /* Sessão expirada ou ausente. */
+        if (status === 401) {
+            return 'Sessão expirada ou não autenticada. Entre novamente no painel.';
+        }
+
+        /* Quem chamou não é administrador. */
+        if (status === 403 || codigo === 'sem_permissao') {
+            return 'Você não está autorizado a disparar a coleta. ' +
+                'Seu usuário precisa estar na tabela "administradores" do Supabase.';
+        }
+
+        /* Falha de rede real (sem status HTTP). */
+        if (!status && /Failed to fetch|NetworkError|load failed/i.test(texto)) {
             return 'Não foi possível falar com o Supabase. Verifique a URL, a chave e a sua conexão.';
         }
 

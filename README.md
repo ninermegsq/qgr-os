@@ -456,11 +456,12 @@ VALUES ('<UUID-do-usuario>', 'seu@email.com', 'Seu nome');
 Com isso o login em `/admin` passa. Sem essa linha o painel recusa o acesso com
 “Este usuário não está cadastrado como administrador da Q GRÃOS”.
 
-### 4. Publicar a Edge Function (pendente)
+### 4. Publicar a Edge Function (opcional)
 
-O código está em `supabase/functions/noticias/index.ts`, mas **a função ainda não foi
-publicada** no projeto — o site não depende dela: ele lê as notícias direto pela tabela
-com RLS. Para publicar:
+O código está em `supabase/functions/noticias/index.ts`, mas **a função não foi publicada**
+no projeto — e o site não depende dela: ele lê as notícias direto pela tabela com RLS, e
+**nenhuma página do site chama essa função** (o portal de notícias usa só `/rest/v1/`). Para
+publicar mesmo assim:
 
 ```bash
 supabase functions deploy noticias
@@ -559,9 +560,16 @@ A coleta não depende de ninguém: ela roda sozinha no repositório, pela workfl
 | Sábado e domingo, à noite | 2 horas |
 
 O cron do GitHub roda em UTC: a workflow usa `*/15 12-21 * * 1-5` para o expediente
-(08h–17h45 de Mato Grosso) e `0 0,2,4,6,8,10,22 * * *` mais `0 12,14,16,18,20 * * 6,7`
+(08h–17h45 de Mato Grosso) e `0 0,2,4,6,8,10,22 * * *` mais `0 12,14,16,18,20 * * 0,6`
 para o resto. Os horários de 2 em 2 horas não invadem o expediente, para não disparar duas
 coletas ao mesmo tempo.
+
+> **Atenção ao dia da semana no cron.** O GitHub aceita de **0 a 6** (0 = domingo) e
+> **recusa o valor 7**. Um cron inválido não aparece como erro no botão *Run*: o GitHub
+> simplesmente **rejeita o arquivo inteiro da workflow**, a execução morre em 0 segundo e a
+> workflow passa a aparecer pelo **caminho** do arquivo, sem o nome. Por isso o fim de semana
+> é `0,6` e nunca `6,7`. O `tools/verify.js` valida o cron de todas as workflows antes do
+> push, para o erro ser pego no terminal em vez de no GitHub.
 
 **Por que 15 minutos e não 5:** preço físico de grão não muda a cada 5 minutos. O IMEA publica
 1 a 2 vezes por dia e o Investing.com só anda junto com o mercado. O ciclo de 15 minutos dentro
@@ -617,8 +625,11 @@ apague o preço do dia. O corte é configurável em `QG_LOTE_PARCIAL` (padrão `
 * O IP dos runners do GitHub pode ser bloqueado pelo IMEA, pelo Grão Direto ou pelo
   Investing.com. A trava de lote parcial mantém o preço antigo no ar nesse caso — o painel
   mostra a fonte como *erro* e a página continua com o último valor bom.
-* A Edge Function `cotacoes-trigger` só existe depois do `supabase functions deploy`. Sem
-  ela, o botão do painel não funciona; a coleta automática (schedule) continua normal.
+* A Edge Function `cotacoes-trigger` **ainda não foi publicada** — `GET/OPTIONS
+  /functions/v1/cotacoes-trigger` responde `404`. Sem ela, o botão do painel não funciona; a
+  coleta automática (schedule) continua normal. Publicar com
+  `supabase functions deploy cotacoes-trigger` (ver item 9 em *Ajustes que ainda dependem
+  de você*).
 
 **No painel** (`/admin/`), a aba **Cotações** mostra a tabela toda (fonte, mercado, produto,
 preço, variação, data), o estado de cada fonte e deixa **publicar**, **despublicar** e **excluir**
@@ -732,6 +743,11 @@ Depois de publicar:
    `QG_GITHUB_WORKFLOW` (*Edge Functions → Secrets*). É o que faz o botão
    **Atualizar cotações agora** do painel funcionar. Sem ela, a coleta automática
    (GitHub Actions) continua funcionando normalmente.
+   > A função confere o token **dentro dela** (Bearer → `/auth/v1/user` → tabela
+   > `administradores`), e não no gateway. É por isso que o `supabase/config.toml` usa
+   > `verify_jwt = false`: com `true`, o gateway exigiria o JWT também no preflight
+   > `OPTIONS` do CORS, que nunca leva o `Authorization`, o navegador abortaria antes do
+   > `POST` e o painel mostraria apenas “Failed to fetch”, sem status nenhum.
 10. **Cadastrar o segredo da coleta no GitHub** — *Settings → Secrets and variables → Actions*:
    `QG_SUPABASE_SERVICE_ROLE` (a chave service role do Supabase, em
    *Project Settings → API Keys*). É o único segredo obrigatório para a coleta automática

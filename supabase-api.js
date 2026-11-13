@@ -189,12 +189,35 @@
 
         /* Chama uma Edge Function do Supabase usando a sessao do
            painel (o token de sessao vai no Authorization). */
-        invokeFunction: function (nome, body, extraHeaders) {
-            return request('/functions/v1/' + nome, {
-                method: 'POST',
-                headers: extraHeaders,
-                body: body || {}
-            });
+        invokeFunction: async function (nome, body, extraHeaders) {
+            try {
+                return await request('/functions/v1/' + nome, {
+                    method: 'POST',
+                    headers: extraHeaders,
+                    body: body || {}
+                });
+            } catch (error) {
+                /* O nome da funcao vai junto: um 404 aqui quase sempre
+                   significa "a funcao nao foi publicada no Supabase",
+                   e nao "o painel esta fora do ar". */
+                error.funcao = nome;
+
+                /* A Edge Function responde { erro, mensagem }. Esse
+                   texto explica o que falta configurar (segredo do
+                   GitHub, permissao, etc.). */
+                try {
+                    const detalhe = JSON.parse(error.body || '{}');
+
+                    if (detalhe && typeof detalhe === 'object') {
+                        if (detalhe.mensagem) error.mensagem = detalhe.mensagem;
+                        if (detalhe.erro) error.codigo = detalhe.erro;
+                    }
+                } catch (parseError) {
+                    /* body nao era JSON: fica a mensagem original */
+                }
+
+                throw error;
+            }
         },
 
         /* ---------- Autenticação ---------- */

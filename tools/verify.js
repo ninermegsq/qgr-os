@@ -1198,6 +1198,115 @@ if (!/FRAZAO_LOTE_PARCIAL/.test(coletor)) {
     errors.push('tools/coletar-cotacoes.js sem a trava de lote parcial (lote parcial nao despublica)');
 }
 
+/* ---------- 30b. Sintaxe do cron (o GitHub rejeita o arquivo inteiro) ----------
+ * Um cron invalido nao da erro no "Run": o GitHub simplesmente
+ * recusa a workflow, a execucao morre em 0 segundo e a workflow passa
+ * a aparecer pelo CAMINHO do arquivo, sem o nome. Isso ja aconteceu
+ * com "0 12,14,16,18,20 * * 6,7": o 7 nao existe no dia da semana
+ * (o GitHub vai de 0 a 6, sendo 0 = domingo). A checagem abaixo
+ * valida o cron de verdade, para pegar isso antes do push. */
+const CRON_LIMITS = [
+    { campo: 'minuto', min: 0, max: 59 },
+    { campo: 'hora', min: 0, max: 23 },
+    { campo: 'dia do mes', min: 1, max: 31 },
+    { campo: 'mes', min: 1, max: 12 },
+    { campo: 'dia da semana', min: 0, max: 6 }
+];
+
+/* Um campo de cron pode ser: *, lista (1,2), faixa (1-5) ou
+ * passo (1-5/2, "asterisco / 15"). Cada peca precisa caber no
+ * limite do campo. */
+function validarCampoCron(bruto, limite) {
+    const pecas = String(bruto).split(',');
+    const problemas = [];
+
+    pecas.forEach((peca) => {
+        const parte = peca.trim();
+        if (!parte) {
+            problemas.push('campo vazio');
+            return;
+        }
+
+        // Separa o passo: "*/15", "1-5/2"
+        const passos = parte.split('/');
+        if (passos.length > 2) {
+            problemas.push('passo invalido em "' + parte + '"');
+            return;
+        }
+
+        const intervalo = passos[0];
+        const passo = passos[1];
+
+        if (passo !== undefined) {
+            if (!/^\d+$/.test(passo) || Number(passo) < 1) {
+                problemas.push('passo invalido em "' + parte + '"');
+            }
+        }
+
+        if (intervalo === '*') return;
+
+        const faixa = intervalo.split('-');
+        if (faixa.length > 2) {
+            problemas.push('faixa invalida em "' + parte + '"');
+            return;
+        }
+
+        faixa.forEach((n) => {
+            if (!/^\d+$/.test(n)) {
+                problemas.push('valor nao numerico em "' + parte + '"');
+                return;
+            }
+            const valor = Number(n);
+            if (valor < limite.min || valor > limite.max) {
+                problemas.push(
+                    limite.campo + ' "' + valor + '" fora de ' + limite.min + '-' + limite.max +
+                    ' (em "' + parte + '")'
+                );
+            }
+        });
+    });
+
+    return problemas;
+}
+
+function validarCron(expressao, rotulo) {
+    const partes = expressao.trim().split(/\s+/);
+    if (partes.length !== 5) {
+        errors.push('Cron invalido em ' + rotulo + ': "' + expressao + '" tem ' + partes.length + ' campos (sao 5)');
+        return;
+    }
+    CRON_LIMITS.forEach((limite, indice) => {
+        validarCampoCron(partes[indice], limite).forEach((problema) => {
+            errors.push('Cron invalido em ' + rotulo + ': "' + expressao + '" -> ' + limite.campo + ': ' + problema);
+        });
+    });
+}
+
+/* Todas as workflows do projeto passam por essa validação */
+const PASTA_WORKFLOWS = path.join(ROOT, '.github', 'workflows');
+const workflows = fs.existsSync(PASTA_WORKFLOWS)
+    ? fs.readdirSync(PASTA_WORKFLOWS).filter(nome => /\.ya?ml$/i.test(nome))
+    : [];
+
+let cronsVistos = 0;
+
+workflows.forEach(nome => {
+    const conteudo = fs.readFileSync(path.join(PASTA_WORKFLOWS, nome), 'utf8');
+    const padrao = /cron:\s*['"]?([^'"\n#]+?)['"]?\s*(?:#.*)?$/gm;
+    let achado;
+
+    while ((achado = padrao.exec(conteudo)) !== null) {
+        cronsVistos++;
+        validarCron(achado[1], nome);
+    }
+});
+
+if (cronsVistos) {
+    notes.push(cronsVistos + ' expressao(oes) cron validada(s) em ' + workflows.length + ' workflow(s)');
+} else {
+    warnings.push('Nenhum cron encontrado nas workflows: a coleta nao roda sozinha');
+}
+
 /* A pagina pergunta o banco de novo (a aba aberta acompanha a coleta) */
 if (!/setInterval/.test(cotacoesJs)) {
     errors.push('cotacoes.js sem atualizar os numeros sozinho (setInterval)');

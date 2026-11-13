@@ -8,6 +8,15 @@ project_id = "rppoiwrbxqdbtavhgdjk"
 verify_jwt = false
 
 [functions.cotacoes-trigger]
-# Exige sessao: so quem esta autenticado chega ate a funcao, e ela
-# ainda confere se o usuario e administrador antes de disparar a coleta.
-verify_jwt = true
+# O TOKEN E CONFERIDO DENTRO DA FUNCAO, NAO NO GATEWAY.
+#
+# Com verify_jwt = true, o gateway do Supabase exige o JWT em TODAS as
+# requisicoes - inclusive no preflight OPTIONS do CORS, que nunca leva
+# o cabecalho Authorization. O navegador aborta a requisicao antes do
+# POST e o painel so ve "Failed to fetch", sem status nenhum.
+#
+# Com verify_jwt = false, o preflight passa e chega na funcao. A
+# seguranca continua inteira: a propria funcao exige o Bearer, valida
+# a sessao em /auth/v1/user e so dispara a coleta para quem esta com
+# ativo = true na tabela administradores (401/403 caso contrario).
+verify_jwt = false

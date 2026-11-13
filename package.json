@@ -15,6 +15,7 @@
     "test:server": "node tools/test-server.js",
     "test:supabase": "node tools/test-supabase.js",
     "probe": "node tools/probe-api.js",
+    "node": "node",
     "cotacoes:coletar": "node tools/coletar-cotacoes.js",
     "cotacoes:simular": "node tools/coletar-cotacoes.js --dry-run",
     "visual": "node tools/visual-check.js",

@@ -26,6 +26,7 @@ const path = require('path');
 
 const argumentos = process.argv.slice(2);
 const USAR_PYTHON = argumentos.indexOf('--python') !== -1;
+const USAR_OPCOES = argumentos.indexOf('--options') !== -1;
 
 /* "--salvar <arquivo>" grava o corpo cru da resposta no arquivo. */
 const indiceSalvar = argumentos.indexOf('--salvar');
@@ -234,10 +235,14 @@ function mostrarNextData(texto) {
 }
 
 async function sondarComFetch(url) {
+    const metodo = USAR_OPCOES ? 'OPTIONS' : 'GET';
+
     const resposta = await fetch(url, {
+        method: metodo,
         headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; QG-RAOS/1.0; +https://qgraos.com.br)',
-            Accept: 'application/json, text/html, */*'
+            Accept: 'application/json, text/html, */*',
+            Origin: 'https://qgraos.com.br'
         },
         redirect: 'follow'
     });
@@ -245,8 +250,20 @@ async function sondarComFetch(url) {
     const texto = await resposta.text();
     const tipo = resposta.headers.get('content-type') || '';
 
-    console.log('\n=== ' + url + ' ===');
+    console.log('\n=== ' + url + ' (' + metodo + ') ===');
     console.log('  status: ' + resposta.status + '  (' + tipo + ')');
+
+    /* Os cabecalhos de CORS decidem se o navegador entrega a
+       resposta ou se o fetch falha com "Failed to fetch". */
+    const cors = [];
+
+    resposta.headers.forEach((valor, nome) => {
+        if (nome.toLowerCase().indexOf('access-control') === 0) {
+            cors.push(nome + ': ' + valor);
+        }
+    });
+
+    console.log('  CORS: ' + (cors.length ? cors.join(' | ') : '(nenhum cabecalho de CORS)'));
 
     let dados = null;
     try {

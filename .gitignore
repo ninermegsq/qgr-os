@@ -14,6 +14,10 @@ npm-debug.log*
 .env
 .env.*
 .qg-admin.json
+supabase/.temp/
+
+# Sondas temporarias de diagnostico
+tools/tmp-*.js
 
 # Publicacao
 .netlify/

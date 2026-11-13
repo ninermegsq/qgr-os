@@ -231,6 +231,8 @@ npm run sitemap
 | `admin/admin.js` | Lógica do painel (login, CRUD de notícias, de cotações e de anúncios, status de lead, CSV, gráficos) |
 | `supabase/migrations/20260101000000_qg_init.sql` | Schema do banco: tabelas, RLS, RPC públicas e vistas do painel |
 | `supabase/migrations/20261112103000_qg_cotacoes_produto_uf.sql` | Colunas `produto_chave` e `uf` da tabela `cotacoes` (filtros de produto e de estado), com índice e o preenchimento das cotações publicadas |
+| `supabase/migrations/20261113140000_qg_revoca_vistas_painel_anon.sql` | Revoga das seis vistas do painel o privilégio padrão `SELECT ... TO PUBLIC` (é o que entregava os números do painel à chave pública) e o papel `anon` |
+| `supabase/migrations/20261113150000_qg_vistas_dia_site.sql` | Faz `vw_leads_por_dia` e `vw_visitas_por_dia` agruparem pelo dia de Mato Grosso (o site), e não pelo dia UTC do Postgres |
 | `supabase/functions/noticias/index.ts` | Edge Function `noticias` (feed público com cache) |
 | `supabase/config.toml` | Configuração do projeto Supabase (inclui `verify_jwt = false` da função) |
 | `server.js` | Servidor estático local, sem dependências (entrega `404.html` em URL errada) |
@@ -409,6 +411,13 @@ conteúdo do arquivo. O script é idempotente: pode rodar de novo sem erro.
 
 > Neste projeto as migrations **já estão aplicadas** no banco `rppoiwrbxqdbtavhgdjk`.
 > O histórico completo (com o que cada uma faz) está em `supabase/migrations/README.md`.
+>
+> ⚠️ **Duas migrations ainda não aplicadas no banco** (13/11/2026): as que revogam das
+> vistas do painel o acesso da chave pública (`20261113140000`) e as que agrupam o
+> gráfico por dia de Mato Grosso (`20261113150000`). Elas estão prontas e versionadas,
+> mas o CLI do Supabase não está autenticado nesta máquina. Aplique-as no **SQL Editor**
+> do Dashboard (ou com `supabase db push`) antes de publicar: até lá, a chave pública
+> continua lendo `vw_painel_resumo` e o gráfico do painel agrupa pelo dia UTC.
 
 ### 2. A chave pública (já preenchida)
 

@@ -1435,6 +1435,104 @@ if (!/COTACOES_POR_PAGINA\s*=\s*24/.test(cotacoesJs)) {
     errors.push('cotacoes.js sem o bloco de 24 cotacoes do "carregar mais"');
 }
 
+/* ---------- 30. As vistas do painel nao podem ser lidas pelo anon ----------
+   O Postgres da a view o privilegio padrao "SELECT ... TO PUBLIC".
+   Um "GRANT SELECT ... TO authenticated" SOMA esse privilegio: o
+   papel anon (a chave publica do site) continua lendo a view. No
+   projeto isso vazava os numeros do painel: vw_painel_resumo
+   devolvia HTTP 200 com os agregados reais. */
+const vistasPainel = [
+    'vw_painel_resumo',
+    'vw_leads_por_dia',
+    'vw_visitas_por_dia',
+    'vw_visitas_por_tipo',
+    'vw_anuncios_desempenho',
+    'vw_anuncios_desempenho_publica'
+];
+
+const revogaVistas = read('supabase/migrations/20261113140000_qg_revoga_vistas_painel_anon.sql');
+
+vistasPainel.forEach(vista => {
+    /* Precisa revogar de PUBLIC: e o privilegio padrao do Postgres. */
+    if (!new RegExp('REVOKE ALL ON public\\.' + vista + ' FROM PUBLIC').test(revogaVistas)) {
+        errors.push('A migration de revogacao das vistas do painel nao revoga ' +
+            vista + ' de PUBLIC (o privilegio padrao do Postgres)');
+    }
+    if (!new RegExp('REVOKE ALL ON public\\.' + vista + ' FROM anon').test(revogaVistas)) {
+        errors.push('A migration de revogacao das vistas do painel nao revoga ' +
+            vista + ' do papel anon');
+    }
+    if (!new RegExp('GRANT SELECT ON public\\.' + vista + ' TO authenticated').test(revogaVistas)) {
+        errors.push('A migration de revogacao das vistas do painel nao devolve ' +
+            vista + ' ao administrador');
+    }
+});
+
+notes.push('Vistas do painel: revogadas para anon e PUBLIC (o privilegio padrao da view)');
+
+/* ---------- 31. O painel le as datas no fuso do site ----------
+   O site (script.js, noticia.js) usa FUSO_QG = -4 (Mato Grosso). O
+   painel usava o fuso do navegador do administrador: entre 20h e
+   00h (horario de Brasilia) ele marcava a visita do dia seguinte e
+   o formulario de anuncio gravava o prazo com o dia errado. */
+if (!/const FUSO_QG\s*=\s*-4\s*\*\s*60\s*\*\s*60\s*\*\s*1000/.test(adminJs)) {
+    errors.push('admin/admin.js sem a constante FUSO_QG do fuso do site (Mato Grosso, UTC-4)');
+}
+['formatarData', 'formatarDiaCurto', 'dataParaCampo', 'inicioParaIso', 'fimParaIso'].forEach(nome => {
+    const posicao = adminJs.indexOf('function ' + nome + '(');
+    if (posicao === -1) {
+        errors.push('admin/admin.js sem a funcao ' + nome);
+        return;
+    }
+
+    /* Procura o corpo da funcao (ate a proxima chave de funcao) e
+       confere que ela usa o fuso do site. */
+    const corpo = adminJs.slice(posicao, posicao + 900);
+    if (corpo.indexOf('FUSO_QG') === -1 && corpo.indexOf('instanteNoFusoDoSite') === -1) {
+        errors.push('admin/admin.js: ' + nome + ' nao usa o fuso do site (FUSO_QG)');
+    }
+});
+if (!/function instanteNoFusoDoSite\(/.test(adminJs)) {
+    errors.push('admin/admin.js sem o helper instanteNoFusoDoSite (datas do formulario de anuncio)');
+}
+if (!/'-04:00'/.test(adminJs)) {
+    errors.push('admin/admin.js sem o deslocamento -04:00 ao montar o prazo do anuncio');
+}
+
+notes.push('Painel: datas no fuso do site (Mato Grosso, UTC-4), igual a listagem e a materia');
+
+/* O grafico do painel precisa agrupar pelo dia do site: as vistas
+   agrupavam por dia UTC e jogavam as visitas da noite no dia
+   seguinte. */
+const vistaDia = read('supabase/migrations/20261113150000_qg_vistas_dia_site.sql');
+
+['vw_leads_por_dia', 'vw_visitas_por_dia'].forEach(vista => {
+    if (vistaDia.indexOf(vista) === -1) {
+        errors.push('A migration do dia do site nao recria ' + vista);
+    }
+});
+if (vistaDia.indexOf("AT TIME ZONE 'America/Mato_Grosso'") === -1) {
+    errors.push('A migration do dia do site nao usa o fuso do site nas vistas por dia');
+}
+/* O comentario da migration explica o problema usando date_trunc; o
+   que nao pode sobrar e a expressao no SQL. */
+const vistaDiaSql = vistaDia.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[^\n]*/g, '');
+
+if (/date_trunc\('day'/.test(vistaDiaSql)) {
+    errors.push('A migration do dia do site ainda agrupa por dia UTC (date_trunc)');
+}
+
+notes.push('Grafico do painel: visitas e leads agrupados pelo dia de Mato Grosso');
+
+/* ---------- 32. A meta description da materia ----------
+   Sem isto, o Google e o WhatsApp leem a descricao generica da
+   pagina de noticia em vez do resumo da materia carregada. */
+if (!/definirMeta\('name',\s*'description'/.test(noticiaJs)) {
+    errors.push('noticia.js sem atualizar a meta description da materia (definirMeta name description)');
+}
+
+notes.push('Materia: meta description atualizada com o resumo da noticia');
+
 /* ---------- Relatorio ---------- */
 function report() {
     console.log('');

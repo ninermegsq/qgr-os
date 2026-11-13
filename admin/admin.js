@@ -15,6 +15,14 @@
 (function () {
     const api = window.QGSupabase;
 
+    /* O fuso do site: Mato Grosso (UTC-4). O painel precisa mostrar a
+       mesma data que o site mostra. Sem isto, a data saía no fuso do
+       navegador do administrador: entre 20h e 00h (horario de
+       Brasilia) o painel marcava a visita do dia seguinte, e o grafico
+       de visitas agrupava o dia errado. O site usa a mesma constante
+       em script.js e noticia.js. */
+    const FUSO_QG = -4 * 60 * 60 * 1000;
+
     const STATUS_LEAD = ['novo', 'em_andamento', 'convertido', 'descartado'];
 
     const ROTULO_TIPO = {
@@ -125,20 +133,39 @@
         const data = new Date(iso);
         if (isNaN(data.getTime())) return '—';
 
-        const dia = String(data.getDate()).padStart(2, '0');
-        const mes = String(data.getMonth() + 1).padStart(2, '0');
-        const ano = data.getFullYear();
-        const hora = String(data.getHours()).padStart(2, '0');
-        const minuto = String(data.getMinutes()).padStart(2, '0');
+        /* Lido no fuso do site (Mato Grosso, UTC-4), como o site faz. */
+        const noFuso = new Date(data.getTime() + FUSO_QG);
+
+        const dia = String(noFuso.getUTCDate()).padStart(2, '0');
+        const mes = String(noFuso.getUTCMonth() + 1).padStart(2, '0');
+        const ano = noFuso.getUTCFullYear();
+        const hora = String(noFuso.getUTCHours()).padStart(2, '0');
+        const minuto = String(noFuso.getUTCMinutes()).padStart(2, '0');
 
         return dia + '/' + mes + '/' + ano + ' ' + hora + ':' + minuto;
     }
 
     function formatarDiaCurto(iso) {
         if (!iso) return '';
-        const data = new Date(iso);
+
+        /* A coluna `dia` das vistas do painel e uma data do site (o
+           banco agrupa pelo dia de Mato Grosso), entao ela e lida
+           como texto: aplicar o fuso aqui voltaria um dia. Se vier
+           um instante completo (timestamp), ai sim o fuso conta. */
+        const texto = String(iso).trim();
+        const partes = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+        if (partes) {
+            return partes[3] + '/' + partes[2] + '/' + partes[1].slice(2);
+        }
+
+        const data = new Date(texto);
         if (isNaN(data.getTime())) return '';
-        return String(data.getDate()).padStart(2, '0') + '/' + String(data.getMonth() + 1).padStart(2, '0');
+
+        const noFuso = new Date(data.getTime() + FUSO_QG);
+
+        return String(noFuso.getUTCDate()).padStart(2, '0') + '/' +
+            String(noFuso.getUTCMonth() + 1).padStart(2, '0');
     }
 
     function mostrarAlerta(elemento, mensagem, tipo) {
@@ -618,33 +645,57 @@
 
     function dataParaCampo(iso) {
         if (!iso) return '';
-
         const data = new Date(iso);
         if (isNaN(data.getTime())) return '';
 
-        const dia = String(data.getDate()).padStart(2, '0');
-        const mes = String(data.getMonth() + 1).padStart(2, '0');
-        const ano = data.getFullYear();
+        /* O campo de data do formulario e o dia do site (Mato Grosso). */
+        const noFuso = new Date(data.getTime() + FUSO_QG);
+
+        const dia = String(noFuso.getUTCDate()).padStart(2, '0');
+        const mes = String(noFuso.getUTCMonth() + 1).padStart(2, '0');
+        const ano = noFuso.getUTCFullYear();
 
         return ano + '-' + mes + '-' + dia;
     }
 
-    function inicioParaIso(valor) {
-        if (!valor) return null;
+    /* Monta um instante ISO a partir de uma data AAAA-MM-DD e de uma
+       hora HH:MM:SS, sempre no fuso do site (Mato Grosso, UTC-4).
+       O deslocamento vai na propria string: assim o valor guardado no
+       banco continua legivel ("2026-11-20T00:00:00-04:00") e o
+       Postgres converte para UTC sozinho. */
+    function instanteNoFusoDoSite(chave, hora) {
+        const partes = String(chave || '').split('-');
+        if (partes.length !== 3) return null;
 
-        const data = new Date(valor + 'T00:00:00');
-        if (isNaN(data.getTime())) return null;
+        const ano = Number(partes[0]);
+        const mes = Number(partes[1]);
+        const dia = Number(partes[2]);
 
-        return data.toISOString();
+        if (!ano || !mes || !dia) return null;
+
+        const relogio = String(hora || '00:00:00');
+
+        return ano + '-' +
+            String(mes).padStart(2, '0') + '-' +
+            String(dia).padStart(2, '0') + 'T' +
+            relogio + '-04:00';
     }
 
+    /* O dia inteiro no fuso do site, das 00h de MT (04h UTC) ate a
+       meia-noite seguinte. O painel grava a data escolhida do anuncio
+       no mesmo dia que o site mostra. */
+    function inicioParaIso(valor) {
+        if (!valor) return null;
+        return instanteNoFusoDoSite(valor, '00:00:00');
+    }
+
+    /* O fim do dia escolhido, no fuso do site: 23:59:59 de Mato Grosso.
+       Continua sendo o mesmo dia no formulario (dataParaCampo), para o
+       anunciante nao ver a data advanced quando abre o anuncio para
+       editar. */
     function fimParaIso(valor) {
         if (!valor) return null;
-
-        const data = new Date(valor + 'T23:59:59');
-        if (isNaN(data.getTime())) return null;
-
-        return data.toISOString();
+        return instanteNoFusoDoSite(valor, '23:59:59');
     }
 
     function anuncioNoPrazo(anuncio) {

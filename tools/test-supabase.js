@@ -31,6 +31,16 @@
  *  16. GET  /rest/v1/cotacoes_fontes     -> BLOQUEADO (o estado da
  *                                          coleta é do painel)
  *  17. Painel: o admin lê cotações e o estado das fontes
+ *  18. GET  /rest/v1/vw_* (as 6 vistas do painel) -> BLOQUEADO para a
+ *                                          chave anônima. O Postgres dá
+ *                                          SELECT ... TO PUBLIC como
+ *                                          privilégio padrão de view, e
+ *                                          um GRANT ... TO authenticated
+ *                                          não remove esse padrão: sem
+ *                                          o REVOKE (migration
+ *                                          20261113140000) a chave
+ *                                          pública lê os números do
+ *                                          painel.
  *
  * O lead de teste usa o e-mail TESTE@QGRAOS.INVALID (domínio reservado
  * pela RFC 2606, impossível de existir) e é removido no final.
@@ -549,6 +559,38 @@ async function principal() {
             conferir('Painel le o resumo (vw_painel_resumo)',
                 resumo.status === 200 && Array.isArray(linhasResumo) && linhasResumo.length === 1,
                 'HTTP ' + resumo.status);
+
+            /* As vistas do painel nao podem ser lidas pela chave publica
+               (o papel anon). O Postgres da a view o privilegio padrao
+               "SELECT ... TO PUBLIC": sem o REVOKE, o anon le os
+               numeros do painel. A migration 20261113140000 fecha
+               isso. */
+            const vistasPainel = [
+                'vw_painel_resumo',
+                'vw_leads_por_dia',
+                'vw_visitas_por_dia',
+                'vw_visitas_por_tipo',
+                'vw_anuncios_desempenho',
+                'vw_anuncios_desempenho_publica'
+            ];
+
+            for (const vista of vistasPainel) {
+                const resposta = await fetch(CONFIG.url + '/rest/v1/' + vista, {
+                    headers: cabecalhos()
+                });
+
+                /* 404 = a view nao existe no banco (migration ainda nao
+                   aplicada): o anon nao le nada. 401/403 = o privilegio
+                   foi revogado. 200 = VAZOU: o privilege padrao PUBLIC
+                   da view entregou os numeros do painel a chave
+                   publica. */
+                const bloqueio = resposta.status === 401 ||
+                    resposta.status === 403 ||
+                    resposta.status === 404;
+
+                conferir('A chave anonima nao le ' + vista, bloqueio,
+                    'HTTP ' + resposta.status + (bloqueio ? ' (bloqueada)' : ' (VAZOU)'));
+            }
 
             /* Publicar uma noticia de teste pelo painel e ver no site --- */
             const tituloTeste = 'Notícia de teste automático ' + new Date().toISOString();

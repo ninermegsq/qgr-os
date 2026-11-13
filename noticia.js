@@ -166,6 +166,11 @@
 
         definirCanonical(url);
 
+        /* A meta description da pagina: sem isto, o Google e o
+           WhatsApp leem a descricao generica de "noticia.html"
+           (a que esta no HTML) em vez do resumo da materia. */
+        if (resumo) definirMeta('name', 'description', resumo);
+
         definirMeta('property', 'og:type', 'article');
         definirMeta('property', 'og:locale', 'pt_BR');
         definirMeta('property', 'og:site_name', 'Q GRÃOS');

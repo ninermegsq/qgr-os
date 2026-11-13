@@ -67,6 +67,17 @@ const notes = [];
  * para o painel nao virar lixo de teste. */
 const VISITANTES_TESTE = new Set();
 
+/* Identificador unico desta execucao da verificacao.
+ *
+ * O banco recusa o mesmo e-mail + telefone quando a repeticao acontece
+ * em menos de 5 minutos (regra "envio_duplicado"). Se o teste usasse
+ * sempre o mesmo par, a segunda rodada cairia no 400 e o relatorio
+ * acusaria um erro que nao existe. Por isso cada execucao usa um par
+ * proprio: o padrao some com o que ja estava gravado. */
+const MARCA_EXECUCAO = Date.now().toString(36).slice(-6);
+const EMAIL_TESTE = 'teste+' + MARCA_EXECUCAO + '@exemplo.com.br';
+const TELEFONE_TESTE = '(66) 9' + MARCA_EXECUCAO + '-0000';
+
 /* Endereco do backend Supabase. Falha de rede aqui e problema do
  * servidor, nao do site: o site precisa funcionar sem o banco. */
 const HOST_SUPABASE = /https:\/\/[a-z0-9-]+\.supabase\.co/i;
@@ -1056,11 +1067,11 @@ async function verificarPainelAdmin(browser, report) {
 
             // O formulario testado na home gravou um lead de teste.
             // Ele e apagado aqui para nao sujar o painel de quem usa o site.
-            const limpeza = await page.evaluate(async () => {
+            const limpeza = await page.evaluate(async (emailTeste) => {
                 if (!window.QGSupabase) return { apagados: 0, erro: 'cliente do Supabase ausente' };
 
                 try {
-                    const filtro = 'email=eq.' + encodeURIComponent('teste@exemplo.com.br');
+                    const filtro = 'email=eq.' + encodeURIComponent(emailTeste);
                     const antes = await window.QGSupabase.select('leads', 'select=id&' + filtro);
 
                     if (!antes || !antes.length) return { apagados: 0 };
@@ -1071,7 +1082,7 @@ async function verificarPainelAdmin(browser, report) {
                 } catch (erro) {
                     return { apagados: 0, erro: String((erro && erro.message) || erro) };
                 }
-            });
+            }, EMAIL_TESTE);
 
             painel.limpeza = limpeza;
 
@@ -1370,7 +1381,22 @@ async function main() {
             });
             page.on('response', response => {
                 if (response.status() >= 400) {
-                    badResponses.push({ url: response.url(), status: response.status() });
+                    /* Guarda o corpo da resposta: o status sozinho nao
+                       diz o motivo (o banco responde 400 com um codigo
+                       no corpo, como "envio_duplicado"). */
+                    let corpo = Promise.resolve('');
+
+                    try {
+                        corpo = response.text().catch(() => '');
+                    } catch (erro) {
+                        corpo = Promise.resolve('');
+                    }
+
+                    badResponses.push({
+                        url: response.url(),
+                        status: response.status(),
+                        corpo: corpo
+                    });
                 }
             });
 
@@ -1571,7 +1597,7 @@ async function main() {
 
             /* ---------- Formulario ---------- */
             if (target.name === 'home') {
-                const formResult = await page.evaluate(() => {
+                const formResult = await page.evaluate((emailTeste, telefoneTeste) => {
                     const form = document.getElementById('contactForm');
                     if (!form) return { present: false };
 
@@ -1588,8 +1614,8 @@ async function main() {
                     };
 
                     set('name', 'Teste Visual');
-                    set('email', 'teste@exemplo.com.br');
-                    set('phone', '(66) 99999-0000');
+                    set('email', emailTeste);
+                    set('phone', telefoneTeste);
                     set('message', 'Mensagem de teste & verificacao');
 
                     // Os selects de perfil e busca sao obrigatorios: sem
@@ -1608,7 +1634,7 @@ async function main() {
                         hasConsent: !!document.getElementById('consentimento'),
                         honeypotEmpty: !(document.getElementById('website') || {}).value
                     };
-                });
+                }, EMAIL_TESTE, TELEFONE_TESTE);
 
                 const openedUrl = formResult.opened && formResult.opened[0];
                 interactions.form = {
@@ -1777,6 +1803,28 @@ async function main() {
             const supabaseComErroServidor = respostasSupabase.some(item => item.status >= 500);
             const supabaseRecusou = respostasSupabase.some(item => item.status < 500);
 
+            /* Le o corpo de cada resposta recusada. O status sozinho nao
+               diz o motivo: o banco responde 400 com um codigo no corpo
+               (por exemplo "envio_duplicado"). */
+            const corposResolvidos = new Map();
+
+            for (const item of badResponses) {
+                let corpo = '';
+
+                if (item.corpo && typeof item.corpo.then === 'function') {
+                    try {
+                        corpo = await item.corpo;
+                    } catch (erro) {
+                        corpo = '';
+                    }
+                } else {
+                    corpo = String(item.corpo || '');
+                }
+
+                item.corpoTexto = corpo;
+                corposResolvidos.set(item.url + '|' + item.status, corpo);
+            }
+
             consoleErrors.forEach(item => {
                 const mensagem = item.text || '';
 
@@ -1784,6 +1832,17 @@ async function main() {
                 // regra do banco (antispam, validacao, permissao) e nao um
                 // defeito do site.
                 if (supabaseRecusou && ehRotaDoSupabase(item.url)) {
+                    /* O caso "envio_duplicado" ja foi explicado na nota
+                       do badResponse, com o corpo da resposta. Aqui so
+                       aparece o erro do console, que repete a mesma
+                       coisa. */
+                    const jaExplicado = respostasSupabase.some(item2 =>
+                        item2.url === item.url &&
+                        /envio_duplicado/.test(corposResolvidos.get(item2.url + '|' + item2.status) || '')
+                    );
+
+                    if (jaExplicado) return;
+
                     report.notes.push(label + ': o Supabase recusou a requisicao (regra do banco) -> ' + mensagem);
                     return;
                 }
@@ -1797,13 +1856,29 @@ async function main() {
                 report.problems.push(label + ': erro no console -> ' + mensagem);
             });
 
-            badResponses.forEach(item => {
+            for (const item of badResponses) {
                 if (ehRotaDoSupabase(item.url)) {
-                    report.notes.push(label + ': Supabase respondeu HTTP ' + item.status + ' -> ' + item.url);
-                    return;
+                    const corpo = String(item.corpoTexto || '');
+
+                    /* O proprio banco recusa a repeticao (regra
+                       "envio_duplicado": mesmo e-mail + telefone em menos
+                       de 5 minutos). O site trata esse caso como
+                       sucesso - o lead ja esta gravado. Nao e defeito,
+                       e nao e leitura de servidor com problema. */
+                    const duplicado = /envio_duplicado/.test(corpo);
+
+                    if (duplicado) {
+                        report.notes.push(label + ': reenvio do mesmo lead recusado pelo banco ' +
+                            '(regra anti-duplicidade, ja registrado)');
+                        continue;
+                    }
+
+                    report.notes.push(label + ': Supabase respondeu HTTP ' + item.status +
+                        ' -> ' + item.url + ' | corpo: ' + (corpo.slice(0, 200) || '(vazio)'));
+                    continue;
                 }
                 report.problems.push(label + ': resposta HTTP ' + item.status + ' -> ' + item.url);
-            });
+            }
 
             failedRequests.forEach(item => {
                 if (ehRotaDoSupabase(item.url)) {

@@ -1325,6 +1325,10 @@ function montarConsultaNoticias(continuar) {
     consulta += '&publicado_em=gte.' + encodeURIComponent(inicioDoDia(dia));
     consulta += '&publicado_em=lt.' + encodeURIComponent(fimDoDia(dia));
 
+    /* A ordem precisa ser estavel: sem um desempate, duas noticias
+       publicadas no mesmo instante podem trocar de lugar entre uma
+       pagina e outra, e o "carregar mais" repetiria uma materia.
+       O id (que e unico) serve de desempate. */
     if (categoriasSelecionadas.length) {
         const lista = categoriasSelecionadas
             .map(valor => 'categoria.eq.' + encodeURIComponent(valor))
@@ -1334,9 +1338,9 @@ function montarConsultaNoticias(continuar) {
 
         // Com filtro a ordem é só por data: o destaque não é empurrado
         // para o topo de uma combinação que ele não representa.
-        consulta += '&order=publicado_em.desc';
+        consulta += '&order=publicado_em.desc,id.desc';
     } else {
-        consulta += '&order=destaque.desc,publicado_em.desc';
+        consulta += '&order=destaque.desc,publicado_em.desc,id.desc';
     }
 
     consulta += '&limit=' + NOTICIAS_POR_PAGINA +

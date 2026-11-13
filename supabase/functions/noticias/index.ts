@@ -122,7 +122,10 @@ serve(async (request: Request) => {
   const filtros = [
     "publicado=eq.true",
     `select=${campos.join(",")}`,
-    "order=destaque.desc,publicado_em.desc",
+    // O id no fim da ordenacao e o desempate: duas noticias publicadas
+    // no mesmo instante nao podem trocar de lugar entre duas chamadas
+    // (o site usa a mesma ordem).
+    "order=destaque.desc,publicado_em.desc,id.desc",
     `limit=${limite}`,
   ];
 

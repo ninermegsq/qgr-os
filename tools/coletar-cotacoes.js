@@ -1348,6 +1348,12 @@ function imprimirResumo(itens) {
 }
 
 async function principal() {
+    /* Le a URL e a chave publica do site.config.js. Sem isso, o
+       CONFIG.anonKey fica vazio e o login do administrador falha com
+       "No API key found in request" (a chave publica e a unica
+       credencial que o coletor tem sem service role). */
+    lerConfigDoSite();
+
     console.log('\n=== Coleta de cotacoes (Q GRAOS) ===\n');
     console.log('  Supabase: ' + CONFIG.url);
 

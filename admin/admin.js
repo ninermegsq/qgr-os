@@ -667,6 +667,10 @@
            nao tiver a visao (ou as colunas novas), o painel continua
            funcionando com o que existe. */
         const tentativas = [
+            ['vw_anuncios_desempenho_publica',
+                'select=id,titulo,empresa,texto,url,imagem_url,posicao,formato,publicado,prioridade,peso,' +
+                'impressoes,impressoes_hoje,cliques,autorizacao,inicio_em,fim_em,limite_impressoes,' +
+                'limite_impressoes_dia,cota_esgotada,criado_em&order=prioridade.desc,criado_em.desc&limit=200'],
             ['vw_anuncios_desempenho',
                 'select=id,titulo,empresa,texto,url,imagem_url,posicao,formato,publicado,prioridade,peso,' +
                 'impressoes,impressoes_hoje,cliques,autorizacao,inicio_em,fim_em,limite_impressoes,' +

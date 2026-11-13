@@ -1382,6 +1382,46 @@ if (!/process\.exitCode\s*=\s*1/.test(read('tools/coletar-cotacoes.js'))) {
 
 notes.push('Travas anti-regressao: CSV de lead sem formula, titulo de 220, ordem estavel e noindex da noticia');
 
+/* O dia da cota diaria de anuncios precisa ser o dia do site (Mato
+   Grosso, UTC-4), nao o dia UTC do Postgres. */
+const cotaFuso = read('supabase/migrations/20261113120000_qg_dia_cota_anuncios_fuso_site.sql');
+
+if (cotaFuso.indexOf("AT TIME ZONE 'America/Mato_Grosso'") === -1) {
+    errors.push('A migration do dia da cota de anuncios nao usa o fuso do site (America/Mato_Grosso)');
+}
+/* O comentario da migration explica o problema usando a palavra
+   current_date; o que nao pode sobrar e a expressao no SQL. */
+const cotaFusoSql = cotaFuso.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[^\n]*/g, '');
+
+if (cotaFusoSql.indexOf('current_date') !== -1) {
+    errors.push('A migration do dia da cota de anuncios ainda usa current_date (dia UTC em vez do dia do site)');
+}
+['anuncios_elegiveis', 'registrar_impressao_anuncio', 'vw_anuncios_desempenho'].forEach(objeto => {
+    if (cotaFuso.indexOf(objeto) === -1) {
+        errors.push('A migration do fuso da cota de anuncios nao trata ' + objeto);
+    }
+});
+
+/* O painel le estas colunas da view: a recriacao nao pode mudar o nome */
+['impressoes_hoje', 'cota_esgotada', 'limite_impressoes_dia'].forEach(coluna => {
+    if (cotaFuso.indexOf(coluna) === -1) {
+        errors.push('A migration do fuso da cota de anuncios removeu a coluna ' + coluna +
+            ' da view (o painel le dela)');
+    }
+});
+
+/* A view do painel precisa existir sem RLS (security_invoker): a tabela
+   anuncios tem politica de leitura so para admin, e o painel nao pode
+   ficar sem linha para um usuario com conta. */
+if (cotaFuso.indexOf('vw_anuncios_desempenho_publica') === -1) {
+    errors.push('A migration do fuso da cota de anuncios sem a visao publica do painel (vw_anuncios_desempenho_publica)');
+}
+if (!/vw_anuncios_desempenho_publica/.test(adminJs)) {
+    errors.push('admin/admin.js sem ler a visao publica do painel (vw_anuncios_desempenho_publica)');
+}
+
+notes.push('Cota diaria de anuncios: contada no dia do site (Mato Grosso, UTC-4)');
+
 /* ---------- Relatorio ---------- */
 function report() {
     console.log('');

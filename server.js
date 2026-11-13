@@ -43,10 +43,24 @@ const server = http.createServer((request, response) => {
 
     if (urlPath === '/' || urlPath === '') urlPath = '/index.html';
 
+    /* Um byte nulo no caminho faz o fs.stat lançar uma exceção
+       síncrona (ERR_INVALID_ARG_VALUE) e derrubar o servidor inteiro.
+       Melhor recusar a URL antes de tocar no disco. */
+    if (urlPath.indexOf('\u0000') !== -1) {
+        response.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('400 - URL invalida');
+        return;
+    }
+
     let filePath = path.join(ROOT, urlPath);
 
-    // Impede acesso a arquivos fora da pasta do projeto
-    if (!filePath.startsWith(ROOT)) {
+    /* Impede acesso a arquivos fora da pasta do projeto.
+       O prefixo sozinho nao basta: um diretorio vizinho cujo nome
+       comece com o nome da pasta ("...graos2") passaria no teste.
+       Por isso a comparacao inclui o separador de caminho. */
+    const dentroDoProjeto = filePath === ROOT || filePath.startsWith(ROOT + path.sep);
+
+    if (!dentroDoProjeto) {
         response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
         response.end('403 - Acesso negado');
         return;

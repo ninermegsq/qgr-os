@@ -125,6 +125,10 @@
     </main>
 
     <script src="site.config.js?v=1" defer></script>
+    <!-- A pagina de erro tambem passa pelo analytics: sem o supabase-api.js
+         o pageview do 404 nunca chegaria a tabela de visitas, e a visita
+         de erro e justamente a que o time precisa medir. -->
+    <script src="supabase-api.js?v=2" defer></script>
     <script src="script.js?v=11" defer></script>
 </body>
 

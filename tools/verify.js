@@ -535,6 +535,26 @@ if (apiScriptIndex !== -1 && scriptIndex !== -1 && apiScriptIndex > scriptIndex)
     errors.push('supabase-api.js precisa ser carregado ANTES de script.js');
 }
 
+/* Toda pagina publica precisa do cliente REST: sem ele o pageview
+   (e o lead) nunca chegam ao banco. A pagina de erro nao e excecao:
+   a visita de erro e justamente a que o time precisa medir. */
+['index.html', 'noticias.html', 'noticia.html', 'cotacoes.html', 'publicidade.html', '404.html'].forEach(pagina => {
+    const conteudo = read(pagina);
+    const carrega = /<script[^>]+src="(\.\.\/)?supabase-api\.js/.test(conteudo);
+
+    if (!carrega) {
+        errors.push(pagina + ' nao carrega supabase-api.js (o analytics e o lead nao chegam ao banco)');
+        return;
+    }
+
+    const posicaoApi = conteudo.indexOf('supabase-api.js');
+    const posicaoScript = conteudo.indexOf('script.js');
+
+    if (posicaoScript !== -1 && posicaoApi > posicaoScript) {
+        errors.push(pagina + ' precisa carregar supabase-api.js ANTES de script.js');
+    }
+});
+
 // As noticias tem pagina propria: a lista fica em noticias.html
 const noticiasHtml = read('noticias.html');
 

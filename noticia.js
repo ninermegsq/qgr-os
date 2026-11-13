@@ -46,16 +46,23 @@
         return texto;
     }
 
+    /* O fuso do site: Mato Grosso (UTC-4). A data da matéria é lida
+       neste fuso para combinar com a listagem de notícias, que também
+       filtra o dia por aqui. */
+    const FUSO_QG = -4 * 60 * 60 * 1000;
+
     function formatarData(iso) {
         if (!iso) return '';
 
         const data = new Date(iso);
         if (isNaN(data.getTime())) return '';
 
-        const dia = String(data.getDate()).padStart(2, '0');
-        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const noFuso = new Date(data.getTime() + FUSO_QG);
 
-        return dia + '/' + mes + '/' + data.getFullYear();
+        const dia = String(noFuso.getUTCDate()).padStart(2, '0');
+        const mes = String(noFuso.getUTCMonth() + 1).padStart(2, '0');
+
+        return dia + '/' + mes + '/' + noFuso.getUTCFullYear();
     }
 
     function formatarDataLonga(iso) {
@@ -64,7 +71,9 @@
         const data = new Date(iso);
         if (isNaN(data.getTime())) return '';
 
-        return data.getDate() + ' de ' + MESES[data.getMonth()] + ' de ' + data.getFullYear();
+        const noFuso = new Date(data.getTime() + FUSO_QG);
+
+        return noFuso.getUTCDate() + ' de ' + MESES[noFuso.getUTCMonth()] + ' de ' + noFuso.getUTCFullYear();
     }
 
     function rotuloCategoria(valor) {

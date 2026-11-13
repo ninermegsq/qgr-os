@@ -131,6 +131,47 @@ async function main() {
         failures.push('GET /404.html  ->  ' + errorPage.status);
     }
 
+    /* Regressoes de seguranca do servidor local:
+       - byte nulo no caminho derrubava o processo (fs.stat lanca excecao
+         sincronica) e o servidor morria;
+       - o guard de path traversal comparava prefixo de string e aceitava
+         um diretorio vizinho cujo nome comecasse com o nome da pasta. */
+
+    const nulo = await request('/%00x.txt');
+    if (nulo.status === 400) {
+        results.push('GET /%00x.txt  ->  400 (byte nulo recusado)');
+    } else {
+        failures.push('GET /%00x.txt  ->  ' + nulo.status + ' (esperava 400)');
+    }
+
+    const traversal = await request('/../../../../Windows/System32/drivers/etc/hosts');
+    if (traversal.status === 403) {
+        results.push('GET /../../../../Windows/...  ->  403 (fora da pasta)');
+    } else {
+        failures.push('GET /../../../../Windows/...  ->  ' + traversal.status + ' (esperava 403)');
+    }
+
+    const vizinho = path.join(path.dirname(ROOT), path.basename(ROOT) + '__teste_vizinho');
+    fs.mkdirSync(vizinho, { recursive: true });
+    fs.writeFileSync(path.join(vizinho, 'segredo.txt'), 'conteudo-que-nao-pode-vazar', 'utf8');
+
+    const fuga = await request('/../' + encodeURIComponent(path.basename(vizinho)) + '/segredo.txt');
+    if (fuga.status === 403) {
+        results.push('GET /../<pasta vizinha>/segredo.txt  ->  403 (diretorio vizinho bloqueado)');
+    } else {
+        failures.push('GET /../<pasta vizinha>/segredo.txt  ->  ' + fuga.status + ' (esperava 403)');
+    }
+
+    fs.rmSync(vizinho, { recursive: true, force: true });
+
+    // O servidor tem de continuar vivo depois das requisicoes hostis
+    const vivo = await request('/');
+    if (vivo.status === 200) {
+        results.push('GET / depois das requisicoes hostis  ->  200 (o servidor continua de pe)');
+    } else {
+        failures.push('GET / depois das requisicoes hostis  ->  ' + vivo.status + ' (o servidor morreu)');
+    }
+
     // As paginas novas do portal de noticias precisam responder 200
     const paginas = [
         { rota: '/noticias.html', precisa: 'filtroCategorias' },

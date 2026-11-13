@@ -1015,9 +1015,15 @@ function formatarData(iso) {
     const data = new Date(iso);
     if (isNaN(data.getTime())) return '';
 
-    const dia = String(data.getDate()).padStart(2, '0');
-    const mes = String(data.getMonth() + 1).padStart(2, '0');
-    const ano = data.getFullYear();
+    /* A listagem e filtrada pelo dia de Mato Grosso (-04:00). Se a data
+       do card saisse no fuso do navegador, a mesma materia apareceria
+       no dia 12 com o rotulo 13 (so muda na faixa da noite, mas
+       aparece). Por isso a data e lida no fuso do site. */
+    const noFuso = new Date(data.getTime() + FUSO_QG);
+
+    const dia = String(noFuso.getUTCDate()).padStart(2, '0');
+    const mes = String(noFuso.getUTCMonth() + 1).padStart(2, '0');
+    const ano = noFuso.getUTCFullYear();
 
     return dia + '/' + mes + '/' + ano;
 }
@@ -1197,6 +1203,7 @@ function carregarNoticias(acrescentar) {
                 botaoMais.hidden = lista.length < NOTICIAS_POR_PAGINA;
                 botaoMais.disabled = false;
                 botaoMais.textContent = 'Carregar mais notícias';
+                botaoMais.dataset.modo = 'mais';
             }
 
             return lista;
@@ -1207,8 +1214,13 @@ function carregarNoticias(acrescentar) {
             if (!continuar) mostrarAvisoNoticias('Não foi possível carregar as notícias agora.');
 
             if (botaoMais) {
+                /* O botao precisa ficar visivel: sem isso o texto
+                   "Tentar de novo" preparado abaixo nunca aparece e o
+                   leitor so pode recarregar a pagina no escuro. */
+                botaoMais.hidden = false;
                 botaoMais.disabled = false;
                 botaoMais.textContent = 'Tentar de novo';
+                botaoMais.dataset.modo = 'tentar';
             }
 
             return [];
@@ -1358,30 +1370,47 @@ function mensagemSemResultados() {
 /* Conta quantas notícias publicadas existem em cada categoria.
    Uma consulta leve: do banco vem só o campo categoria.
    A contagem é do dia escolhido — os números dos chips precisam
-   falar do que está na tela. */
+   falar do que está na tela.
+
+   A consulta é paginada: com o acervo crescendo, um "limit=1000"
+   sem paginação devolveria um pedaço arbitrário do banco e os
+   chips contariam notícias que não estão na tela. */
 function carregarContagemCategorias() {
     if (!SUPABASE_ATIVO) return Promise.resolve({});
 
     const dia = dataSelecionada || hojeEmQg();
 
-    const consulta = 'select=categoria&publicado=eq.true' +
+    const base = 'select=categoria&publicado=eq.true' +
         '&publicado_em=gte.' + encodeURIComponent(inicioDoDia(dia)) +
         '&publicado_em=lt.' + encodeURIComponent(fimDoDia(dia)) +
-        '&limit=1000';
+        '&order=publicado_em.desc';
 
-    return SUPABASE.select('noticias', consulta)
-        .then(linhas => {
-            const lista = Array.isArray(linhas) ? linhas : [];
-            const contagem = {};
+    const contagem = {};
+    let offset = 0;
 
-            lista.forEach(linha => {
-                const chave = (linha && linha.categoria) || 'Geral';
-                contagem[chave] = (contagem[chave] || 0) + 1;
+    const pagina = () => {
+        const consulta = base + '&limit=1000&offset=' + offset;
+
+        return SUPABASE.select('noticias', consulta)
+            .then(linhas => {
+                const lista = Array.isArray(linhas) ? linhas : [];
+
+                lista.forEach(linha => {
+                    const chave = (linha && linha.categoria) || 'Geral';
+                    contagem[chave] = (contagem[chave] || 0) + 1;
+                });
+
+                if (lista.length < 1000) {
+                    contagemCategorias = contagem;
+                    return contagem;
+                }
+
+                offset += lista.length;
+                return pagina();
             });
+    };
 
-            contagemCategorias = contagem;
-            return contagem;
-        })
+    return pagina()
         .catch(erro => {
             console.warn('Q GRAOS: não foi possível contar as categorias.', erro && erro.message);
             return {};
@@ -1649,26 +1678,42 @@ function escreverDataNaUrl() {
     window.history.replaceState(null, '', novaUrl);
 }
 
-/* Carrega os dias que têm notícia (o botão ‹ › pula o dia vazio) */
+/* Carrega os dias que têm notícia (o botão ‹ › pula o dia vazio)
+
+   Paginado: com o acervo grande, um limite fixo de 1000 linhas
+   cortaria a lista e a navegação para os dias mais antigos pararia
+   de funcionar. */
 function carregarDiasComNoticia() {
     if (!SUPABASE_ATIVO) return Promise.resolve([]);
 
-    return SUPABASE.select('noticias',
-        'select=publicado_em&publicado=eq.true&order=publicado_em.desc&limit=1000')
-        .then(linhas => {
-            const lista = Array.isArray(linhas) ? linhas : [];
-            const dias = [];
+    const dias = [];
+    let offset = 0;
 
-            lista.forEach(linha => {
-                const chave = chaveDiaQg(linha && linha.publicado_em);
-                if (chave && dias.indexOf(chave) === -1) dias.push(chave);
+    const pagina = () => {
+        const consulta = 'select=publicado_em&publicado=eq.true' +
+            '&order=publicado_em.desc&limit=1000&offset=' + offset;
+
+        return SUPABASE.select('noticias', consulta)
+            .then(linhas => {
+                const lista = Array.isArray(linhas) ? linhas : [];
+
+                lista.forEach(linha => {
+                    const chave = chaveDiaQg(linha && linha.publicado_em);
+                    if (chave && dias.indexOf(chave) === -1) dias.push(chave);
+                });
+
+                if (lista.length < 1000) {
+                    dias.sort();
+                    diasComNoticia = dias;
+                    return dias;
+                }
+
+                offset += lista.length;
+                return pagina();
             });
+    };
 
-            dias.sort();
-            diasComNoticia = dias;
-
-            return dias;
-        })
+    return pagina()
         .catch(erro => {
             console.warn('Q GRAOS: não foi possível carregar os dias com notícia.', erro && erro.message);
             return [];
@@ -1890,7 +1935,11 @@ function hashAnuncio(texto) {
 /* Semente do dia: muda a cada dia, mas é a mesma para o mesmo visitante */
 function sementeAnuncio() {
     const visitante = (typeof ANALYTICS !== 'undefined' && ANALYTICS.visitorId) || 'visitante';
-    const dia = new Date().toISOString().slice(0, 10);
+
+    /* O dia e o do site (-04:00). Com a data UTC, entre 21h e meia-noite
+       de Mato Grosso o rodizio dos anuncios ja comecaria no dia
+       seguinte. */
+    const dia = hojeEmQg();
 
     return visitante + '|' + dia;
 }
@@ -2044,7 +2093,7 @@ function proximoAnuncioEspaco(posicao, formato) {
     gravarEstadoEspacoAnuncio(chave, {
         cursor: ciclo.cursor,
         ultimo: ciclo.ultimo,
-        dia: new Date().toISOString().slice(0, 10)
+        dia: hojeEmQg()
     });
 
     return anuncio;
@@ -2284,7 +2333,19 @@ function prepararBotaoMaisNoticias() {
     botao.addEventListener('click', () => {
         botao.disabled = true;
         botao.textContent = 'Carregando…';
-        carregarNoticias(true);
+
+        /* O botao "Tentar de novo" volta a carregar a lista do dia
+           escolhido (e nao a proxima pagina), para nao misturar dias. */
+        const continuando = botao.dataset.modo === 'mais';
+
+        carregarNoticias(continuando)
+            .then(() => {
+                if (continuando) botao.textContent = 'Carregar mais notícias';
+            })
+            .catch(() => {
+                botao.disabled = false;
+                botao.textContent = 'Tentar de novo';
+            });
     });
 }
 

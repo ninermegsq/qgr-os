@@ -585,11 +585,20 @@ do expediente é o que pega o preço novo logo depois da divulgação, sem gasta
 
 **Segredos do repositório** (*Settings → Secrets and variables → Actions*):
 
-| Segredo | Para que serve |
-| --- | --- |
-| `QG_SUPABASE_SERVICE_ROLE` | chave service role do Supabase: é o que o coletor usa para gravar. **É ela que deve ser usada** — assim, trocar a senha do painel não quebra a coleta |
-| `QG_ADMIN_EMAIL` | reserva: se a service role não existir, o coletor entra no painel com este e-mail |
-| `QG_ADMIN_PASSWORD` | reserva: a senha do administrador, para o caso acima |
+| Segredo | Para que serve | Situação |
+| --- | --- | --- |
+| `QG_SUPABASE_SERVICE_ROLE` | chave service role do Supabase: é o que o coletor usa para gravar. **É ela que deve ser usada** — assim, trocar a senha do painel não quebra a coleta | ⏸ ainda falta cadastrar |
+| `QG_ADMIN_EMAIL` | reserva: se a service role não existir, o coletor entra no painel com este e-mail | ✅ cadastrado |
+| `QG_ADMIN_PASSWORD` | reserva: a senha do administrador, para o caso acima | ✅ cadastrado |
+
+> **Como funciona o caminho de reserva.** Sem a service role, o coletor faz login no
+> Supabase com e-mail e senha e grava com o token de sessão. Esse caminho depende de duas
+> coisas: a chave pública estar no `site.config.js` (é de lá que o coletor tira a
+> `anonKey`) e o e-mail/senha estarem nos secrets. **Com os dois no lugar a coleta
+> funciona** — foi assim que a primeira execução bem-sucedida aconteceu.
+>
+> A service role continua sendo o caminho recomendado: não depende de senha e não
+> quebra se o dono trocar a senha do painel.
 
 Nenhum desses segredos vai para o Git. O `tools/verify.js` confere que nenhum deles aparece
 no código versionado.
@@ -752,6 +761,10 @@ Depois de publicar:
    `QG_SUPABASE_SERVICE_ROLE` (a chave service role do Supabase, em
    *Project Settings → API Keys*). É o único segredo obrigatório para a coleta automática
    rodar; `QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD` são só a reserva.
+   > **Já funciona pela reserva.** `QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD` já estão
+   > cadastrados e a coleta automática grava no banco por esse caminho. A service role é
+   > o recomendado (trocar a senha do painel não quebra a coleta), mas não é o que
+   > impede a coleta de rodar hoje.
 11. **Primeiro anúncio (opcional)** — a aba “Anúncios” publica espaços patrocinados. Antes,
    combine com o patrocinador a posição (lista de notícias ou fim da matéria), o prazo de
    veiculação, o **peso no rodízio** (a participação dele no revezamento) e a autorização por

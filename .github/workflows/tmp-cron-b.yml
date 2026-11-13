@@ -1,0 +1,11 @@
+name: Cron B - dow 6
+
+on:
+  schedule:
+    - cron: '0 12,14,16,18,20 * * 6'
+
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

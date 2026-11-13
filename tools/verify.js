@@ -1422,6 +1422,19 @@ if (!/vw_anuncios_desempenho_publica/.test(adminJs)) {
 
 notes.push('Cota diaria de anuncios: contada no dia do site (Mato Grosso, UTC-4)');
 
+/* A pagina de cotacoes nao pode depender do limite de 1000 linhas do
+   PostgREST: com o acervo crescendo, as ultimas cotacoes
+   desapareceriam da tela. */
+if (!/COTACOES_POR_PEDIDO/.test(cotacoesJs)) {
+    errors.push('cotacoes.js sem paginar o pedido de cotacoes (COTACOES_POR_PEDIDO)');
+}
+if (!/&offset=' \+ deslocamento/.test(cotacoesJs)) {
+    errors.push('cotacoes.js sem usar offset no pedido de cotacoes');
+}
+if (!/COTACOES_POR_PAGINA\s*=\s*24/.test(cotacoesJs)) {
+    errors.push('cotacoes.js sem o bloco de 24 cotacoes do "carregar mais"');
+}
+
 /* ---------- Relatorio ---------- */
 function report() {
     console.log('');

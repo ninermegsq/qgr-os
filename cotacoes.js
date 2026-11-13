@@ -61,6 +61,12 @@
     /* Todas as cotacoes publicadas (a memoria da pagina) */
     let cotacoes = [];
 
+    /* Quantas cotacoes o pedido traz por vez. O PostgREST corta o
+       resultado em 1000 linhas: a pagina pede de 500 em 500, com
+       deslocamento, para nao depender desse limite (o "carregar mais"
+       da tela e do banco sao coisas diferentes). */
+    const COTACOES_POR_PEDIDO = 500;
+
     /* Quantas cotacoes aparecem antes de pedir "carregar mais" */
     const COTACOES_POR_PAGINA = 24;
 
@@ -800,25 +806,51 @@
             return Promise.resolve([]);
         }
 
-        const consulta = campos => 'select=' + campos +
+        /* O pedido e paginado: o PostgREST corta o resultado em 1000
+           linhas, e a pagina nao pode depender desse limite (com o
+           acervo crescendo, as ultimas cotações simplesmente
+           desapareceriam da tela). */
+        const consulta = (campos, deslocamento) => 'select=' + campos +
             '&publicado=eq.true' +
             '&order=mercado.asc,produto.asc' +
-            '&limit=500';
+            '&limit=' + COTACOES_POR_PEDIDO +
+            '&offset=' + deslocamento;
 
-        return cliente.select('cotacoes', consulta(CAMPOS))
-            .catch(erro => {
-                /* Banco sem as colunas do filtro: a pagina continua
-                   funcionando, classificando o nome aqui. */
-                const mensagem = String((erro && erro.message) || '');
+        function pedir(campos, deslocamento) {
+            return cliente.select('cotacoes', consulta(campos, deslocamento))
+                .catch(erro => {
+                    /* Banco sem as colunas do filtro: a pagina continua
+                       funcionando, classificando o nome aqui. */
+                    const mensagem = String((erro && erro.message) || '');
 
-                if (!/produto_chave|\bcoluna\b|\bcolumn\b/i.test(mensagem)) throw erro;
+                    if (!/produto_chave|\bcoluna\b|\bcolumn\b/i.test(mensagem)) throw erro;
 
-                console.warn('Q GRAOS: o banco ainda nao tem produto_chave/uf; usando a regra local.');
+                    console.warn('Q GRAOS: o banco ainda nao tem produto_chave/uf; usando a regra local.');
 
-                return cliente.select('cotacoes', consulta(CAMPOS_SEM_CLASSIFICACAO));
-            })
-            .then(linhas => {
-                cotacoes = classificar(Array.isArray(linhas) ? linhas : []);
+                    return cliente.select('cotacoes', consulta(CAMPOS_SEM_CLASSIFICACAO, deslocamento));
+                });
+        }
+
+        const linhas = [];
+
+        /* Puxa os pedidos um depois do outro: um pedido por bloco,
+           ate a ultima resposta vir com menos linhas do que o limite
+           (ou seja: acabou o acervo). */
+        function proximoLote(deslocamento) {
+            return pedir(CAMPOS, deslocamento).then(lote => {
+                const pagina = Array.isArray(lote) ? lote : [];
+
+                linhas.push.apply(linhas, pagina);
+
+                if (pagina.length < COTACOES_POR_PEDIDO) return linhas;
+
+                return proximoLote(deslocamento + pagina.length);
+            });
+        }
+
+        return proximoLote(0)
+            .then(todas => {
+                cotacoes = classificar(Array.isArray(todas) ? todas : []);
 
                 /* Nada mudou desde a ultima vez: nao redesenha a
                    grade (o leitor nao perde o que ja estava

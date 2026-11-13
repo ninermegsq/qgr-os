@@ -282,6 +282,19 @@
             return 'Não foi possível falar com o Supabase. Verifique a URL, a chave e a sua conexão.';
         }
 
+        /* A Edge Function existe, mas o gateway devolveu 401: isso
+           acontece quando a funcao esta com "verify_jwt" ligado e o
+           navegador manda o preflight OPTIONS sem o cabecalho
+           Authorization. O preflight nunca leva o token, entao a
+           funcao precisa estar com verify_jwt = false (o proprio
+           codigo dela confere a sessao do administrador). */
+        if (status === 401 && funcao) {
+            return 'A Edge Function "' + funcao + '" recusou a chamada (401). ' +
+                'Se ela ainda estiver com "verify_jwt" ligado no Supabase, ' +
+                'o navegador nem consegue falar com ela: desligue a verificação ' +
+                'de JWT (verify_jwt = false) e publique de novo.';
+        }
+
         return texto;
     }
 

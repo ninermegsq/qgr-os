@@ -85,11 +85,23 @@ GRANT INSERT, UPDATE, DELETE ON public.administradores TO authenticated;
 -- ---------------------------------------------------------------------
 -- 1. Notícias do agronegócio
 -- ---------------------------------------------------------------------
+-- A coluna `conteudo` (texto completo da matéria) e o limite de 320
+-- caracteres do `resumo` chegaram depois do schema inicial e já são
+-- criados pelo arquivo 20261111192112_qg_portal_noticias_e_anuncios.sql.
+-- Aqui eles entram como "se ainda nao existirem", para que este arquivo
+-- continue valendo como schema completo em um banco novo.
+--
+-- IMPORTANTE: a coluna e o limite sao criados aqui COMO COLUNAS DE
+-- VERDADE. Se este arquivo rodar depois da migracao do portal (que
+-- cria as duas coisas com ALTER TABLE), o CREATE TABLE IF NOT EXISTS
+-- nao mexe em nada e o ADD COLUMN IF NOT EXISTS nao duplica: o
+-- resultado e o mesmo schema nos dois caminhos.
+ALTER TABLE public.noticias ADD COLUMN IF NOT EXISTS conteudo text;
+
 CREATE TABLE IF NOT EXISTS public.noticias (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     titulo text NOT NULL,
     resumo text,
-    conteudo text,
     categoria text NOT NULL DEFAULT 'Geral',
     fonte text,
     url text,
@@ -101,12 +113,24 @@ CREATE TABLE IF NOT EXISTS public.noticias (
     criado_em timestamptz NOT NULL DEFAULT now(),
     atualizado_em timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT noticias_titulo_check CHECK (char_length(titulo) BETWEEN 3 AND 220),
-    CONSTRAINT noticias_resumo_tamanho_check CHECK (resumo IS NULL OR char_length(resumo) <= 320),
     CONSTRAINT noticias_categoria_check CHECK (
         categoria IN ('Soja', 'Milho', 'Sorgo', 'Milheto', 'Feijao', 'Gergelim',
                       'Safra', 'Logistica', 'Mercado', 'Exportacao', 'Geral')
     )
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'noticias_resumo_tamanho_check'
+          AND conrelid = 'public.noticias'::regclass
+    ) THEN
+        ALTER TABLE public.noticias
+            ADD CONSTRAINT noticias_resumo_tamanho_check
+            CHECK (resumo IS NULL OR char_length(resumo) <= 320);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS noticias_publicadas_idx
     ON public.noticias (publicado, publicado_em DESC);

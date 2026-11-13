@@ -5,8 +5,8 @@ Histórico do schema do Supabase, na ordem em que foi aplicado no projeto
 
 | Arquivo | O que faz |
 | --- | --- |
-| `20260101000000_qg_init.sql` | **Arquivo de referência.** Schema completo: tabelas `administradores`, `noticias`, `leads`, `visitas`; RLS; funções `e_admin`, `registrar_lead`, `registrar_evento`, `clicar_noticia`, `noticias_publicas`; vistas `vw_painel_resumo`, `vw_leads_por_dia`, `vw_visitas_por_dia`, `vw_visitas_por_tipo`. É idempotente: pode rodar em um banco novo. |
-| `20261111154444_qg_init.sql` | Primeira aplicação do schema no projeto (gerada a partir do arquivo de referência). |
+| `20260101000000_qg_init.sql` | **Arquivo de referência.** Schema completo: tabelas `administradores`, `noticias`, `leads`, `visitas`; RLS; funções `e_admin`, `registrar_lead`, `registrar_evento`, `clicar_noticia`, `noticias_publicas`; vistas `vw_painel_resumo`, `vw_leads_por_dia`, `vw_visitas_por_dia`, `vw_visitas_por_tipo`. A coluna `noticias.conteudo` e o limite de 320 caracteres do `resumo` entram aqui como "se ainda não existirem" (as duas coisas também são criadas pelo arquivo do portal, mais abaixo). É idempotente: pode rodar em um banco novo. |
+| `20261111154444_qg_init.sql` | Primeira aplicação do schema no projeto (gerada a partir do arquivo de referência). Recebeu a mesma correção: `noticias.conteudo` e o CHECK de 320 caracteres do `resumo` passam a ser criados de forma idempotente, sem depender da ordem em que os arquivos rodarem. |
 | `20261111154527_qg_fix_registrar_evento.sql` | Corrige a função `registrar_evento`, que havia sido criada com um parâmetro duplicado. |
 | `20261111160027_qg_admin_padrao.sql` | Cria o usuário administrador no Auth (`contato@qgraos.com.br`), a identidade e a linha em `administradores`. **A senha não é versionada**: defina `SET app.admin_senha = '...'` na mesma sessão antes de rodar. |
 | `20261111161130_qg_admin_corrige_nulls.sql` | Normaliza para `''` as colunas de token do usuário no Auth (o GoTrue lê essas colunas como texto e falha com `NULL`). |

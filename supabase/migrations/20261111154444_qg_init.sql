@@ -57,6 +57,15 @@ CREATE POLICY administradores_exclusao ON public.administradores
 GRANT SELECT ON public.administradores TO authenticated;
 GRANT INSERT, UPDATE, DELETE ON public.administradores TO authenticated;
 
+-- A coluna `conteudo` (texto completo da matéria) e o limite de 320
+-- caracteres do `resumo` chegaram depois deste arquivo. Eles entram
+-- aqui como "se ainda nao existirem", para que este arquivo continue
+-- valendo como schema completo em um banco novo.
+--
+-- O arquivo 20260101000000_qg_init.sql (referencia) faz o mesmo, com
+-- os mesmos comandos idempotentes: os dois nao conflitam.
+ALTER TABLE public.noticias ADD COLUMN IF NOT EXISTS conteudo text;
+
 CREATE TABLE IF NOT EXISTS public.noticias (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     titulo text NOT NULL,
@@ -77,6 +86,19 @@ CREATE TABLE IF NOT EXISTS public.noticias (
                       'Safra', 'Logistica', 'Mercado', 'Exportacao', 'Geral')
     )
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'noticias_resumo_tamanho_check'
+          AND conrelid = 'public.noticias'::regclass
+    ) THEN
+        ALTER TABLE public.noticias
+            ADD CONSTRAINT noticias_resumo_tamanho_check
+            CHECK (resumo IS NULL OR char_length(resumo) <= 320);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS noticias_publicadas_idx
     ON public.noticias (publicado, publicado_em DESC);

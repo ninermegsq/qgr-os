@@ -77,11 +77,29 @@ jobs:
 
           # 2) O lastmod do arquivo versionado precisa ser posterior (ou
           #    igual) a data da ultima mudanca das paginas do site.
-          ULTIMA_PAGINA=$(git log -1 --no-merges --format=%cs -- '*.html')
+          #
+          #    A comparacao usa o DIA DO SITE (UTC-4), nao a data do
+          #    commit no fuso de quem commiteu. Sao coisas diferentes:
+          #    um commit feito as 21h do horario de Brasilia (UTC-3) cai
+          #    ainda no dia anterior para quem trabalha em Mato Grosso
+          #    (UTC-4), e o sitemap carimba o dia do site. Comparar o
+          #    lastmod com a data "crua" do commit reprova a CI num push
+          #    legitimo entre 20h e 24h, sem ter mudado nada.
+          #
+          #    A conversao usa o mesmo deslocamento do build-sitemap.js
+          #    (FUSO_QG = -4) e o mesmo Node do build, entao os dois lados
+          #    da comparacao falam a mesma lingua.
+          TS_PAGINA=$(git log -1 --no-merges --format=%ct -- '*.html')
           ULTIMO_LASTMOD=$(grep -o '<lastmod>[^<]*' "$TMP/sitemap-versionado.xml" | head -n 1 | cut -d'>' -f2)
 
+          if [ -n "$TS_PAGINA" ]; then
+            ULTIMA_PAGINA=$(node -e "console.log(new Date((Number(process.argv[1]) - 4 * 3600) * 1000).toISOString().slice(0, 10))" "$TS_PAGINA")
+          else
+            ULTIMA_PAGINA=""
+          fi
+
           if [ -n "$ULTIMA_PAGINA" ] && [ "$ULTIMA_PAGINA" \> "$ULTIMO_LASTMOD" ]; then
-            echo "::error::Uma pagina publica mudou em $ULTIMA_PAGINA, depois do lastmod $ULTIMO_LASTMOD. Rode npm run sitemap e faça o commit."
+            echo "::error::Uma pagina publica mudou no dia do site $ULTIMA_PAGINA, depois do lastmod $ULTIMO_LASTMOD. Rode npm run sitemap e faca o commit."
             exit 1
           fi
 

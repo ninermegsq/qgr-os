@@ -96,12 +96,25 @@ GRANT INSERT, UPDATE, DELETE ON public.administradores TO authenticated;
 -- cria as duas coisas com ALTER TABLE), o CREATE TABLE IF NOT EXISTS
 -- nao mexe em nada e o ADD COLUMN IF NOT EXISTS nao duplica: o
 -- resultado e o mesmo schema nos dois caminhos.
-ALTER TABLE public.noticias ADD COLUMN IF NOT EXISTS conteudo text;
+--
+-- ORDEM: o `conteudo` era um ALTER TABLE solto aqui, ANTES do CREATE
+-- TABLE. Num banco novo a tabela ainda nao existia e o arquivo
+-- parava com "relation public.noticias does not exist" — ou seja,
+-- o arquivo de referencia nao valia como schema completo. Agora o
+-- ALTER fica depois do CREATE TABLE e dentro de um DO que so age
+-- quando a tabela JA existia (criada pela migracao do portal).
+DO $$
+BEGIN
+    IF to_regclass('public.noticias') IS NOT NULL THEN
+        ALTER TABLE public.noticias ADD COLUMN IF NOT EXISTS conteudo text;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.noticias (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     titulo text NOT NULL,
     resumo text,
+    conteudo text,
     categoria text NOT NULL DEFAULT 'Geral',
     fonte text,
     url text,
@@ -109,7 +122,12 @@ CREATE TABLE IF NOT EXISTS public.noticias (
     publicado boolean NOT NULL DEFAULT false,
     destaque boolean NOT NULL DEFAULT false,
     cliques integer NOT NULL DEFAULT 0,
-    publicado_em timestamptz NOT NULL DEFAULT now(),
+    -- `publicado_em` é nullable de propósito: é o trigger que decide
+    -- a data de publicação, e só ele consegue distinguir "o cliente
+    -- mandou uma data" de "não veio nenhuma". Com NOT NULL e DEFAULT
+    -- now(), o Postgres preencheria a coluna antes do trigger e a
+    -- data informada seria sempre sobrescrita.
+    publicado_em timestamptz,
     criado_em timestamptz NOT NULL DEFAULT now(),
     atualizado_em timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT noticias_titulo_check CHECK (char_length(titulo) BETWEEN 3 AND 220),
@@ -288,14 +306,16 @@ CREATE OR REPLACE TRIGGER leads_atualizado_em
 BEFORE UPDATE ON public.leads
 FOR EACH ROW EXECUTE FUNCTION public.tg_atualizado_em();
 
--- Grava a data de publicação quando a notícia entra no ar
+-- Grava a data de publicação quando a notícia entra no ar.
+-- No INSERT, a data informada pelo cliente é respeitada; só entra
+-- `now()` quando o INSERT não trouxe nenhuma.
 CREATE OR REPLACE FUNCTION public.tg_publicado_em()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        IF NEW.publicado THEN
+        IF NEW.publicado AND NEW.publicado_em IS NULL THEN
             NEW.publicado_em := now();
         END IF;
     ELSE
@@ -540,6 +560,11 @@ SELECT
     (SELECT count(DISTINCT visitante_id)::int FROM public.visitas) AS visitantes,
     (SELECT count(*)::int FROM public.noticias WHERE publicado = true) AS noticias_publicadas;
 
+-- O Postgres dá à view o privilégio padrão "SELECT ... TO PUBLIC".
+-- Sem o REVOKE, o papel anon (a chave pública do site) lê os números
+-- do painel: o GRANT abaixo SOMA o privilégio, não o substitui.
+REVOKE ALL ON public.vw_painel_resumo FROM PUBLIC;
+REVOKE ALL ON public.vw_painel_resumo FROM anon;
 GRANT SELECT ON public.vw_painel_resumo TO authenticated;
 
 CREATE OR REPLACE VIEW public.vw_leads_por_dia WITH (security_invoker = true) AS
@@ -550,6 +575,8 @@ WHERE criado_em > now() - interval '90 days'
 GROUP BY 1
 ORDER BY 1;
 
+REVOKE ALL ON public.vw_leads_por_dia FROM PUBLIC;
+REVOKE ALL ON public.vw_leads_por_dia FROM anon;
 GRANT SELECT ON public.vw_leads_por_dia TO authenticated;
 
 CREATE OR REPLACE VIEW public.vw_visitas_por_dia WITH (security_invoker = true) AS
@@ -561,6 +588,8 @@ WHERE criado_em > now() - interval '90 days'
 GROUP BY 1
 ORDER BY 1;
 
+REVOKE ALL ON public.vw_visitas_por_dia FROM PUBLIC;
+REVOKE ALL ON public.vw_visitas_por_dia FROM anon;
 GRANT SELECT ON public.vw_visitas_por_dia TO authenticated;
 
 CREATE OR REPLACE VIEW public.vw_visitas_por_tipo WITH (security_invoker = true) AS
@@ -571,4 +600,6 @@ WHERE criado_em > now() - interval '90 days'
 GROUP BY tipo
 ORDER BY total DESC;
 
+REVOKE ALL ON public.vw_visitas_por_tipo FROM PUBLIC;
+REVOKE ALL ON public.vw_visitas_por_tipo FROM anon;
 GRANT SELECT ON public.vw_visitas_por_tipo TO authenticated;

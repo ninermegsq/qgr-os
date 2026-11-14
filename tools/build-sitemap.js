@@ -26,9 +26,14 @@ function readSiteConfig() {
     return factory(sandbox) || {};
 }
 
+/* Deslocamento fixo de Mato Grosso em relacao ao UTC (em ms).
+   Mesmo valor do FUSO_QG do script.js: o lastmod precisa ser o dia
+   do site, nao o dia UTC, que pode estar ate 4 horas a frente. */
+const FUSO_QG = -4 * 60 * 60 * 1000;
+
 const config = readSiteConfig();
 const siteUrl = String(config.siteUrl || 'https://qgraos.com.br/').replace(/\/*$/, '/');
-const today = new Date().toISOString().slice(0, 10);
+const today = new Date(Date.now() + FUSO_QG).toISOString().slice(0, 10);
 
 /* Paginas publicas do site. A pagina de noticias entra separada:
    ela tem conteudo proprio e muda toda vez que ha publicacao nova.

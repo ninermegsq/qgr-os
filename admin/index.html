@@ -270,7 +270,7 @@
                 <div class="panel-box">
                     <h2>Como os anúncios são exibidos</h2>
                     <ul class="rotacao-explica">
-                        <li><strong>Rodízio real:</strong> os anúncios elegíveis entram numa fila e se revezam. Nenhum anunciante fica com o espaço todo.</li>
+                        <li><strong>Rodízio real:</strong> os anúncios elegíveis entram numa fila e se revezam, na proporção do peso de cada anunciante.</li>
                         <li><strong>Peso no rodízio:</strong> define a participação. Peso 3 = três vezes mais espaço que um peso 1 (mesmo peso = mesmo espaço).</li>
                         <li><strong>Prioridade:</strong> só a ordem dentro do ciclo (desempate do peso). O anúncio de maior prioridade aparece primeiro no ciclo, mas não trava o espaço.</li>
                         <li><strong>Prazo e cotas:</strong> o banco só entrega anúncio publicado, dentro do prazo e com cota disponível. Pausou ou esgotou a cota, ele sai da fila na hora.</li>
@@ -278,8 +278,11 @@
                         <li><strong>Contagem:</strong> a impressão só é contada quando o bloco aparece na tela (metade visível). O clique é contado no link "Saiba mais".</li>
                     </ul>
                     <p class="rotacao-nota">
-                        Os números de hoje e a cota restante ficam na tabela abaixo. O painel mostra também
-                        o que está fora do prazo e o que esgotou a cota — nenhum dos dois aparece no site.
+                        O mesmo anunciante não ocupa dois espaços seguidos quando os pesos dos concorrentes
+                        permitem. Se o peso dele for maior que a soma dos outros, a repetição é inevitável —
+                        aí o peso manda. Os números de hoje e a cota restante ficam na tabela abaixo. O painel
+                        mostra também o que está fora do prazo e o que esgotou a cota — nenhum dos dois
+                        aparece no site.
                     </p>
                 </div>
 

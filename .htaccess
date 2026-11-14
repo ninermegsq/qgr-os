@@ -12,6 +12,31 @@ DirectoryIndex index.html
 Options -Indexes
 
 # ------------------------------------------------------------------
+# Arquivos internos bloqueados
+# O site publico e so a raiz: os HTML, o CSS, os JS, as imagens, o
+# robots.txt, o sitemap.xml e a pasta admin/. Nada de material interno
+# (historico do Git, credenciais do painel, variaveis de ambiente,
+# migrations do banco e ferramentas de desenvolvimento).
+#
+# O bloqueio e feito por Rewrite, antes de qualquer leitura de arquivo:
+# o "Redirect 404" do modulo mod_alias nao pega arquivos .htaccess
+# (o Apache os trata antes), por isso a regra fica aqui.
+# ------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Qualquer arquivo ou pasta que comece com ponto:
+    # .git, .gitignore, .gitattributes, .qg-admin.json, .env, .env.local
+    RewriteRule "(^|/)\." - [F,L]
+
+    # Pastas internas de desenvolvimento e de infraestrutura
+    RewriteRule "^(supabase|tools|node_modules)(/|$)" - [F,L]
+
+    # Arquivos internos da raiz
+    RewriteRule "^(package\.json|package-lock\.json)$" - [F,L]
+</IfModule>
+
+# ------------------------------------------------------------------
 # Compressao (deixa o site mais leve)
 # ------------------------------------------------------------------
 <IfModule mod_deflate.c>
@@ -42,7 +67,7 @@ Options -Indexes
 # 'unsafe-inline' em script-src. A fonte vem do Google Fonts.
 # ------------------------------------------------------------------
 <IfModule mod_headers.c>
-    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
 </IfModule>
 
 # ------------------------------------------------------------------

@@ -778,7 +778,77 @@ function prepararAnalytics() {
     ANALYTICS.utm = capturarUtm();
 }
 
+/* O id da sessão é o que o banco usa para segurar o limite de chamada
+   dos contadores (impressão, clique, visualização). O `noticia.js` roda
+   num IIFE separado e não enxerga o `ANALYTICS` daqui, então a sessão
+   também é publicada em `window.QGAnalytics`. */
+if (typeof window !== 'undefined') {
+    window.QGAnalytics = {
+        visitorId: function () { return ANALYTICS.visitorId; },
+        sessionId: function () { return ANALYTICS.sessionId; }
+    };
+}
+
 /* ---------- Eventos ---------- */
+
+/* Chama uma RPC de contador mandando o id da sessão (é o que o banco
+   usa para aplicar o teto por sessão) e cai para a chamada simples
+   quando o banco ainda não conhece esse parâmetro.
+
+   POR QUE O RECUO EXISTE
+   A RPC com `p_sessao_id` só passa a existir depois que a migration
+   20261113180000 é aplicada no banco. Enquanto isso, o PostgREST
+   responde PGRST202 (a função com dois parâmetros não existe) e o
+   contador para de funcionar: o clique e a impressão deixavam de ser
+   contados. Com o recuo, o site volta a contar na função de um
+   parâmetro só — e o teto do banco entra sozinho quando a migration
+   for aplicada, sem precisar publicar o site de novo.
+
+   O recuo é guardado por RPC (o `rpcComSessaoSemRecuo`): depois do
+   primeiro PGRST202 daquela função, as chamadas seguintes já vão
+   direto pelo caminho sem sessão. Assim o site não gasta uma
+   requisição que vai falhar a cada clique e a cada impressão — o
+   console fica limpo e o banco recebe uma chamada por evento. */
+const rpcComSessaoSemRecuo = {};
+
+function contarComSessao(nome, params, descricao) {
+    const sessao = ANALYTICS.sessionId;
+    const semSessao = Object.assign({}, params);
+
+    /* A sessão não serve para nada aqui: o banco já avisou que não
+       conhece o parâmetro. Vai direto. */
+    if (!sessao || rpcComSessaoSemRecuo[nome]) {
+        return SUPABASE.rpc(nome, semSessao).catch(erro => {
+            console.warn('Q GRAOS: não foi possível contar ' + descricao + '.',
+                erro && erro.message);
+            return null;
+        });
+    }
+
+    return SUPABASE.rpc(nome, Object.assign({}, params, { p_sessao_id: sessao }))
+        .catch(erro => {
+            const mensagem = (erro && erro.message) || '';
+
+            /* PGRST202: a função com p_sessao_id não existe ainda. */
+            const semParametro = mensagem.indexOf('PGRST202') !== -1 ||
+                mensagem.indexOf('p_sessao_id') !== -1;
+
+            if (!semParametro) {
+                console.warn('Q GRAOS: não foi possível contar ' + descricao + '.', mensagem);
+                return null;
+            }
+
+            rpcComSessaoSemRecuo[nome] = true;
+            console.warn('Q GRAOS: o banco ainda não aceita p_sessao_id em ' + nome +
+                ' (migration 20261113180000 pendente). Contando sem o teto de sessão.');
+
+            return SUPABASE.rpc(nome, semSessao).catch(erroInterno => {
+                console.warn('Q GRAOS: não foi possível contar ' + descricao + '.',
+                    erroInterno && erroInterno.message);
+                return null;
+            });
+        });
+}
 
 function registrarEvento(tipo, extras) {
     if (!SUPABASE_ATIVO) return;
@@ -944,10 +1014,7 @@ function observarCliques() {
 
             const id = link.getAttribute('data-noticia-id');
             if (id) {
-                SUPABASE.rpc('clicar_noticia', { p_id: id }).catch(erro => {
-                    console.warn('Q GRAOS: não foi possível contar o clique.', erro && erro.message);
-                });
-            }
+                contarComSessao('clicar_noticia', { p_id: id }, 'o clique');            }
         }
 
         /* Clique no anunciante: conta no próprio anúncio (a tabela de
@@ -956,9 +1023,7 @@ function observarCliques() {
             const idAnuncio = link.getAttribute('data-anuncio-id');
 
             if (idAnuncio) {
-                SUPABASE.rpc('clicar_anuncio', { p_id: idAnuncio }).catch(erro => {
-                    console.warn('Q GRAOS: não foi possível contar o clique do anúncio.', erro && erro.message);
-                });
+                contarComSessao('clicar_anuncio', { p_id: idAnuncio }, 'o clique do anúncio');
             }
         }
     }, true);
@@ -976,6 +1041,12 @@ let noticiasCarregadas = 0;
 
 /* Quantas notícias estão na tela (serve para o SEO do filtro) */
 let noticiasVisiveis = 0;
+
+/* Os ids das notícias já desenhadas. A paginação usa deslocamento
+   (offset): se uma notícia for publicada enquanto o leitor rola a
+   página, o banco empurra um item para trás e pode devolver a mesma
+   matéria outra vez. Guardar o id evita o cartão duplicado. */
+let idsNoticiasRenderizadas = new Set();
 
 /* ------------------------------------------------------------------
  * Categorias
@@ -1177,12 +1248,27 @@ function carregarNoticias(acrescentar) {
                 limparElemento(grade);
                 noticiasCarregadas = 0;
                 noticiasVisiveis = 0;
+                idsNoticiasRenderizadas = new Set();
             }
 
             if (!lista.length) {
                 if (!continuar) mostrarAvisoNoticias(mensagemSemResultados(), acaoDoEstadoVazio());
             } else {
-                lista.forEach((noticia, indice) => {
+                /* A paginação é por deslocamento: se uma notícia for
+                   publicada enquanto o leitor rola a página, o banco
+                   empurra um item para trás e pode devolver a mesma
+                   matéria outra vez. O id já desenhado é ignorado. */
+                const novas = lista.filter(noticia => {
+                    const id = noticia && noticia.id;
+
+                    if (id === undefined || id === null) return true;
+                    if (idsNoticiasRenderizadas.has(id)) return false;
+
+                    idsNoticiasRenderizadas.add(id);
+                    return true;
+                });
+
+                novas.forEach((noticia, indice) => {
                     grade.appendChild(criarCardNoticia(noticia));
 
                     // Faixa patrocinada logo depois do 3º card da página
@@ -1193,7 +1279,7 @@ function carregarNoticias(acrescentar) {
                 });
 
                 noticiasCarregadas += lista.length;
-                noticiasVisiveis += lista.length;
+                noticiasVisiveis += novas.length;
             }
 
             atualizarSeoNoticias(noticiasVisiveis > 0);
@@ -1220,10 +1306,17 @@ function carregarNoticias(acrescentar) {
                 botaoMais.hidden = false;
                 botaoMais.disabled = false;
                 botaoMais.textContent = 'Tentar de novo';
-                botaoMais.dataset.modo = 'tentar';
+                /* Se a falha foi ao carregar mais, a lista do dia nao
+                   mudou: o contador de pagina so anda no sucesso, entao
+                   a tentativa seguinte repete a mesma pagina. */
+                botaoMais.dataset.modo = continuar ? 'mais' : 'tentar';
             }
 
-            return [];
+            /* A promessa e recusada de proposito: quem chamou precisa
+               saber que a carga falhou (o botao "Carregar mais" usa
+               isso para nao trocar o aviso de erro por um sucesso
+               falso). */
+            throw erro;
         });
 }
 
@@ -1506,7 +1599,13 @@ function alternarCategoria(valor) {
     // uma categoria com outra.
     noticiasCarregadas = 0;
     noticiasVisiveis = 0;
-    carregarNoticias(false);
+    idsNoticiasRenderizadas = new Set();
+    carregarNoticias(false)
+        .catch(() => {
+            /* O erro ja foi tratado dentro de carregarNoticias
+               (aviso na tela + botao "Tentar de novo"). Aqui so
+               evito a promessa recusada virar alerta do console. */
+        });
 }
 
 /* Liga os chips: clique para marcar, setas para navegar entre eles */
@@ -1808,11 +1907,15 @@ function irParaDia(chave) {
     /* A paginação volta ao começo: "carregar mais" nunca mistura dias */
     noticiasCarregadas = 0;
     noticiasVisiveis = 0;
+    idsNoticiasRenderizadas = new Set();
 
     carregarContagemCategorias()
         .then(() => {
             montarChipsCategorias();
             return carregarNoticias(false);
+        })
+        .catch(() => {
+            /* O erro ja foi tratado dentro de carregarNoticias. */
         });
 }
 
@@ -1898,18 +2001,16 @@ function prepararFiltroData() {
  * 1. O banco devolve só os anúncios ELEGÍVEIS: publicados, dentro do
  *    prazo e sem cota esgotada. Anúncio pausado ou com a cota cheia
  *    nunca entra na fila (e nunca "ocupa" a vaga de outro).
- * 2. Os elegíveis viram uma FILA PONDERADA: cada anúncio entra
- *    "peso" vezes no ciclo (peso 3 = três vezes a exposição de um
- *    peso 1).
- * 3. A fila é embaralhada de forma determinística pelo visitante e
- *    pelo dia: todo mundo começa num ponto diferente do ciclo, então
- *    o primeiro anúncio da página já é distribuído entre os
- *    anunciantes.
- * 4. O cursor vive na sessão (sessionStorage): ao navegar, o próximo
- *    espaço mostra o próximo da fila, sem repetir o mesmo anunciante
- *    duas vezes seguidas.
- * 5. "Prioridade" NÃO prende o anúncio no topo: ela só define a
- *    ordem dentro do ciclo (desempate do peso).
+ * 2. A fila é PONDERADA pelo peso: cada anunciante ocupa "peso" vagas
+ *    no ciclo (peso 3 = três vezes a exposição de um peso 1).
+ * 3. "Prioridade" NÃO prende o anúncio no topo: ela só define a
+ *    ordem preferencial dentro do ciclo (desempate do peso).
+ * 4. O ciclo é por espaço, com a chave "posicao:formato", e cada
+ *    visitante começa num ponto diferente dele (definido pelo
+ *    visitante e pelo dia).
+ * 5. O mesmo anunciante não ocupa dois espaços seguidos quando os
+ *    pesos dos concorrentes permitem; se o peso dele for maior que a
+ *    soma dos outros, a repetição é inevitável — aí o peso manda.
  * ------------------------------------------------------------------ */
 
 /* Anúncios elegíveis por posição */
@@ -1964,30 +2065,236 @@ function gravarEstadoEspacoAnuncio(chave, estado) {
     gravarArmazenamento('sessionStorage', 'qg_espaco_' + chave, JSON.stringify(estado));
 }
 
+/* Nome do anunciante normalizado: dois anúncios do mesmo anunciante
+   precisam cair no mesmo grupo mesmo que o nome venha escrito de
+   formas diferentes (maiúsculas, acentos, espaços extras). */
+function chaveAnunciante(empresa) {
+    const texto = String(empresa || '').trim();
+
+    if (!texto) return '';
+
+    try {
+        /* Tira os acentos (faixa Unicode de combining marks) */
+        const faixa = new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g');
+
+        return texto.normalize('NFD').replace(faixa, '').toUpperCase();
+    } catch (erro) {
+        return texto.toUpperCase();
+    }
+}
+
+/* Distribui as vagas de um anunciante entre os anúncios dele.
+   Cada anúncio ocupa "peso" vagas e o mesmo anúncio não se repete
+   seguidas (quando existe outro do mesmo anunciante na disputa).
+   Devolve a ordem dos anúncios que preenchem as vagas do grupo. */
+function distribuirAnunciosDoGrupo(grupo) {
+    const anuncios = grupo.anuncios;
+    const restantes = anuncios.map(item => item.peso);
+    const ordem = [];
+    let anterior = '';
+
+    for (let vaga = 0; vaga < grupo.peso; vaga++) {
+        let escolhido = -1;
+        let reserva = -1;
+
+        for (let i = 0; i < anuncios.length; i++) {
+            if (!restantes[i]) continue;
+
+            /* O anúncio anterior fica de reserva: só volta para a fila
+               quando não existe nenhum outro do mesmo anunciante. */
+            if (anuncios[i].id === anterior) {
+                if (reserva === -1 || restantes[i] > restantes[reserva]) reserva = i;
+                continue;
+            }
+
+            if (escolhido === -1 || restantes[i] > restantes[escolhido]) escolhido = i;
+        }
+
+        if (escolhido === -1) escolhido = reserva;
+        if (escolhido === -1) break;
+
+        restantes[escolhido]--;
+        anterior = anuncios[escolhido].id;
+        ordem.push(anuncios[escolhido].anuncio);
+    }
+
+    return ordem;
+}
+
+/* Monta a ordem dos anunciantes que disputam as vagas do espaço.
+   Cada anunciante ganha exatamente "peso" vagas (a soma dos pesos dos
+   anúncios dele) e a ordem espalha as vagas: nenhum anunciante ocupa
+   dois espaços seguidos quando o peso dos concorrentes permite. Quando
+   o anunciante pesa mais que o conjunto dos outros, a repetição é
+   inevitável — aí o peso manda, que é a promessa comercial. */
+function montarSequenciaAnunciantes(grupos) {
+    const total = grupos.reduce((soma, grupo) => soma + grupo.peso, 0);
+
+    if (!total) return [];
+
+    const restantes = grupos.map(grupo => grupo.peso);
+    const ultimoPasso = grupos.map(() => -1);
+    const sequencia = [];
+    let anterior = -1;
+
+    for (let passo = 0; passo < total; passo++) {
+        let escolhido = -1;
+
+        for (let i = 0; i < grupos.length; i++) {
+            if (!restantes[i]) continue;
+            /* não repete o anunciante anterior (quando outro tem vaga) */
+            if (i === anterior) continue;
+
+            if (escolhido === -1) {
+                escolhido = i;
+                continue;
+            }
+
+            /* mais vagas restantes vence; empate: quem está há mais
+               tempo fora da fila entra primeiro */
+            if (restantes[i] > restantes[escolhido]) escolhido = i;
+            else if (restantes[i] === restantes[escolhido] && ultimoPasso[i] < ultimoPasso[escolhido]) escolhido = i;
+        }
+
+        /* Só o anunciante anterior tem vaga: repetir é inevitável
+           (o peso dele é maior que o conjunto dos concorrentes). */
+        if (escolhido === -1) {
+            for (let i = 0; i < grupos.length; i++) {
+                if (restantes[i]) {
+                    escolhido = i;
+                    break;
+                }
+            }
+        }
+
+        if (escolhido === -1) break;
+
+        restantes[escolhido]--;
+        ultimoPasso[escolhido] = passo;
+        anterior = escolhido;
+        sequencia.push(escolhido);
+    }
+
+    return sequencia;
+}
+
+/* Move um anúncio para uma posição em que ele não encosta em outro
+   do mesmo anunciante. Devolve a nova ordem ou a original (mesma
+   referência) quando não há lugar livre. */
+function afastarAnunciante(sequencia, indice) {
+    const elemento = sequencia[indice];
+    const resto = sequencia.slice(0, indice).concat(sequencia.slice(indice + 1));
+
+    for (let p = 1; p < resto.length; p++) {
+        if (resto[p - 1] === elemento || resto[p] === elemento) continue;
+
+        resto.splice(p, 0, elemento);
+        return resto;
+    }
+
+    return sequencia;
+}
+
+/* Abre as repetições: primeiro as encostas (o mesmo anunciante duas
+   vezes seguidas) e depois a emenda circular do ciclo (o último
+   espaço encosta no primeiro, porque o visitante entra num ponto
+   qualquer e segue em círculo). */
+function separarAnunciantes(sequencia) {
+    if (sequencia.length < 3) return sequencia;
+
+    let ordem = sequencia.slice();
+    let mudou = true;
+    let tentativas = 0;
+
+    while (mudou && tentativas < sequencia.length * 2) {
+        mudou = false;
+        tentativas++;
+
+        /* encosta interna: move o último do bloco repetido */
+        for (let i = 1; i < ordem.length; i++) {
+            if (ordem[i] === ordem[i - 1]) {
+                const nova = afastarAnunciante(ordem, i);
+
+                if (nova !== ordem) {
+                    ordem = nova;
+                    mudou = true;
+                }
+
+                break;
+            }
+        }
+
+        if (mudou) continue;
+
+        /* emenda circular: o último encosta no primeiro */
+        if (ordem[ordem.length - 1] === ordem[0]) {
+            const nova = afastarAnunciante(ordem, ordem.length - 1);
+
+            if (nova !== ordem) {
+                ordem = nova;
+                mudou = true;
+            }
+        }
+    }
+
+    return ordem;
+}
+
 /* Monta o ciclo ponderado (rodízio ponderado).
-   Cada anúncio entra "peso" vezes no ciclo; a prioridade define a
-   ordem de entrada (desempate quando os pesos são iguais). */
+   O peso do anúncio continua valendo: cada anúncio entra "peso" vezes
+   no ciclo (peso 3 = três vezes a exposição de um peso 1).
+   A montagem é feita por ANUNCIANTE, porque a promessa do painel é que
+   um mesmo anunciante não ocupe dois espaços seguidos: as vagas do
+   anunciante são espalhadas entre as dos concorrentes. Quando o
+   anunciante tem peso maior que o conjunto dos outros, a repetição
+   fica inevitável — aí o peso manda, que é a promessa comercial. */
 function montarCicloAnuncio(lista) {
     if (!lista.length) return [];
 
-    const pesos = lista.map(anuncio => Math.max(1, Math.min(10, Number(anuncio.peso) || 1)));
-    const total = pesos.reduce((soma, peso) => soma + peso, 0);
-    const atuais = pesos.map(() => 0);
-    const ciclo = [];
+    /* Agrupa por anunciante: o peso do anunciante é a soma dos pesos
+       dos anúncios dele (dois anúncios do mesmo anunciante ocupam duas
+       vezes o espaço de um só). */
+    const grupos = [];
+    const porChave = new Map();
 
-    for (let passo = 0; passo < total; passo++) {
-        for (let i = 0; i < lista.length; i++) atuais[i] += pesos[i];
+    lista.forEach(anuncio => {
+        const chave = chaveAnunciante(anuncio.empresa);
+        const peso = Math.max(1, Math.min(10, Number(anuncio.peso) || 1));
+        let grupo = porChave.get(chave);
 
-        let escolhido = 0;
-
-        for (let i = 1; i < lista.length; i++) {
-            /* Empate fica com o primeiro da lista (maior prioridade). */
-            if (atuais[i] > atuais[escolhido]) escolhido = i;
+        if (!grupo) {
+            grupo = { chave: chave, empresa: anuncio.empresa, anuncios: [], peso: 0, prioridade: 0 };
+            porChave.set(chave, grupo);
+            grupos.push(grupo);
         }
 
-        atuais[escolhido] -= total;
-        ciclo.push(lista[escolhido]);
-    }
+        grupo.anuncios.push({ id: anuncio.id, anuncio: anuncio, peso: peso });
+        grupo.peso += peso;
+        grupo.prioridade = Math.max(grupo.prioridade, Number(anuncio.prioridade) || 0);
+    });
+
+    /* Ordem de entrada: prioridade, depois peso, depois nome. */
+    grupos.sort((a, b) => {
+        if (b.prioridade !== a.prioridade) return b.prioridade - a.prioridade;
+        if (b.peso !== a.peso) return b.peso - a.peso;
+        if (a.chave < b.chave) return -1;
+        if (a.chave > b.chave) return 1;
+        return 0;
+    });
+
+    /* Vagas de cada anunciante, sem dois seguidos (quando o peso permite) */
+    const sequencia = separarAnunciantes(montarSequenciaAnunciantes(grupos));
+
+    /* Cada vaga recebe um anúncio do seu anunciante, respeitando o peso individual */
+    const filas = grupos.map(grupo => distribuirAnunciosDoGrupo(grupo));
+    const usados = grupos.map(() => 0);
+    const ciclo = [];
+
+    sequencia.forEach(indiceGrupo => {
+        const filaDoGrupo = filas[indiceGrupo];
+        ciclo.push(filaDoGrupo[usados[indiceGrupo] % filaDoGrupo.length]);
+        usados[indiceGrupo]++;
+    });
 
     return ciclo;
 }
@@ -2013,7 +2320,7 @@ function carregarAnunciosDireto(posicao) {
         encodeURIComponent(posicao) + '&order=prioridade.desc&limit=50';
 
     const simples = 'select=id,titulo,empresa,texto,url,imagem_url,formato,posicao,prioridade,' +
-        'inicio_em,fim_em&publicado=eq.true&posicao=eq.' + encodeURIComponent(posicao) +
+        'peso,inicio_em,fim_em&publicado=eq.true&posicao=eq.' + encodeURIComponent(posicao) +
         '&order=prioridade.desc&limit=50';
 
     return SUPABASE.select('anuncios', completa)
@@ -2077,18 +2384,11 @@ function proximoAnuncioEspaco(posicao, formato) {
     if (!ciclo.itens.length) return null;
 
     /* Índice do próximo: deslocamento (visitante) + cursor (sessão) */
-    let indice = (ciclo.deslocamento + ciclo.cursor) % ciclo.itens.length;
+    const indice = (ciclo.deslocamento + ciclo.cursor) % ciclo.itens.length;
 
-    /* Não repete o mesmo anunciante em dois espaços seguidos */
-    if (ciclo.ultimo && ciclo.itens.length > 1) {
-        let tentativas = 0;
-
-        while (ciclo.itens[indice].id === ciclo.ultimo && tentativas < ciclo.itens.length) {
-            indice = (indice + 1) % ciclo.itens.length;
-            tentativas++;
-        }
-    }
-
+    /* O ciclo já vem montado sem dois anunciantes seguidos (quando o
+       peso permite), então não há nada a pular aqui: pular a vaga
+       comeria o peso do anunciante e quebraria a proporção. */
     const anuncio = ciclo.itens[indice];
 
     ciclo.cursor = (ciclo.cursor + 1) % ciclo.itens.length;
@@ -2280,9 +2580,7 @@ function observarImpressaoAnuncio(elemento) {
 
             observador.disconnect();
 
-            SUPABASE.rpc('registrar_impressao_anuncio', { p_id: id }).catch(() => {
-                /* contador é acessório: se falhar, a página continua */
-            });
+            contarComSessao('registrar_impressao_anuncio', { p_id: id }, 'a impressão do anúncio');
         });
     }, { threshold: 0.5 });
 
@@ -2344,11 +2642,14 @@ function prepararBotaoMaisNoticias() {
 
         carregarNoticias(continuando)
             .then(() => {
-                if (continuando) botao.textContent = 'Carregar mais notícias';
+                /* O proprio carregamento ja devolve o botao pronto
+                   ("Carregar mais noticias" ou "Tentar de novo"). */
+                botao.disabled = false;
             })
             .catch(() => {
+                /* O botao ja saiu pronto de carregarNoticias (rotulo e
+                   modo de acao). Aqui so e preciso destrava-lo. */
                 botao.disabled = false;
-                botao.textContent = 'Tentar de novo';
             });
     });
 }
@@ -2387,8 +2688,15 @@ if (document.getElementById('newsGrid')) {
             return carregarNoticias(false);
         })
         .catch(() => {
+            /* Sem anúncios, dias ou contagem, a lista do dia ainda pode
+               ser carregada: o erro so foi tratado dentro de
+               carregarNoticias. */
             montarChipsCategorias();
             return carregarNoticias(false);
+        })
+        .catch(() => {
+            /* Evita a promessa recusada virar alerta do console: o
+               aviso e o botao "Tentar de novo" ja estao na tela. */
         });
 }
 

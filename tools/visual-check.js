@@ -1843,6 +1843,18 @@ async function main() {
 
                     if (jaExplicado) return;
 
+                    /* Mesma logica da nota do badResponse: PGRST202 com
+                       p_sessao_id e a migration 20261113180000 pendente.
+                       A nota la explica com o endereco da chamada; aqui
+                       o erro do console seria so a repeticao. */
+                    const sessaoPendente = respostasSupabase.some(item2 =>
+                        item2.url === item.url &&
+                        /PGRST202/.test(corposResolvidos.get(item2.url + '|' + item2.status) || '') &&
+                        /p_sessao_id/.test(corposResolvidos.get(item2.url + '|' + item2.status) || '')
+                    );
+
+                    if (sessaoPendente) return;
+
                     report.notes.push(label + ': o Supabase recusou a requisicao (regra do banco) -> ' + mensagem);
                     return;
                 }
@@ -1870,6 +1882,22 @@ async function main() {
                     if (duplicado) {
                         report.notes.push(label + ': reenvio do mesmo lead recusado pelo banco ' +
                             '(regra anti-duplicidade, ja registrado)');
+                        continue;
+                    }
+
+                    /* PGRST202 com p_sessao_id: a RPC de contador ainda
+                       esta na versao de um parametro so, porque a migration
+                       20261113180000 (teto por sessao) ainda nao foi
+                       aplicada no banco. O site trata isso: chama de novo
+                       sem a sessao e o contador funciona. Nao e defeito do
+                       site - e a migration pendente, que fica registrada
+                       aqui para nao sumir do relatorio. */
+                    const sessaoPendente = /PGRST202/.test(corpo) && /p_sessao_id/.test(corpo);
+
+                    if (sessaoPendente) {
+                        report.notes.push(label + ': migration 20261113180000 pendente no banco ' +
+                            '(a RPC de contador ainda nao aceita p_sessao_id; o site ja conta pelo ' +
+                            'caminho de recuo) -> ' + item.url);
                         continue;
                     }
 

@@ -234,6 +234,9 @@ npm run sitemap
 | `supabase/migrations/20261113120000_qg_dia_cota_anuncios_fuso_site.sql` | A cota diária de impressões, a RPC `anuncios_elegiveis`, a `registrar_impressao_anuncio` e a view `vw_anuncios_desempenho` passam a contar o dia de Mato Grosso (o dia do site) e não o dia UTC do Postgres |
 | `supabase/migrations/20261113140000_qg_revoca_vistas_painel_anon.sql` | Revoga das seis vistas do painel o privilégio padrão `SELECT ... TO PUBLIC` (é o que entregava os números do painel à chave pública) e o papel `anon` |
 | `supabase/migrations/20261113150000_qg_vistas_dia_site.sql` | Faz `vw_leads_por_dia` e `vw_visitas_por_dia` agruparem pelo dia de Mato Grosso (o site), e não pelo dia UTC do Postgres |
+| `supabase/migrations/20261113160000_qg_revoga_escrita_anon.sql` | Revoga o privilégio de escrita do papel `anon` em `leads`, `visitas` e `administradores` (o Postgres concede `ALL` nas tabelas ao `anon` em um projeto novo) e reaffirma o que o painel precisa |
+| `supabase/migrations/20261113170000_qg_rpc_painel_anuncios.sql` | RPC `anuncios_painel_desempenho` (só o administrador recebe os anúncios com o contato de autorização) e recria a view pública de desempenho sem `autorizacao` e com `security_invoker`; devolve as notícias publicadas para quem tem conta |
+| `supabase/migrations/20261113180000_qg_limites_chamadas_publicas.sql` | Teto por sessão para as quatro RPCs de contagem, guarda atômica de lead duplicado, `publicado_em` respeitado no `INSERT` e índice de `visitas` por visitante |
 | `supabase/functions/noticias/index.ts` | Edge Function `noticias` (feed público com cache) |
 | `supabase/config.toml` | Configuração do projeto Supabase (inclui `verify_jwt = false` da função) |
 | `server.js` | Servidor estático local, sem dependências (entrega `404.html` em URL errada) |
@@ -249,6 +252,9 @@ npm run sitemap
 | `tools/test-server.js` | Teste HTTP de ponta a ponta |
 | `tools/test-supabase.js` | Teste de integração com o Supabase (RLS, RPC, login e painel) |
 | `tools/visual-check.js` | Verificação visual real no Chrome headless (layout, contraste, interações) |
+| `tools/audit-motor-anuncios.js` | Mede a distribuição real entregue pelo motor de anúncios (rodízio, peso e repetição): 16 regras, sem navegador e sem rede |
+| `tools/sonda-estado.js` | Sondagem do banco vivo: permissões, vistas, RPCs e leituras públicas (somente leitura, exceto as sondagens com `tx=rollback`) |
+| `tools/prova-contadores.js` | Prova de ponta a ponta dos contadores públicos no banco vivo (confere se visualização e clique sobem de fato) |
 | `tools/coletar-cotacoes.js` | Coletor de cotações (IMEA + Grão Direto + Investing.com): monta os cards, grava no Supabase ou imprime o SQL pronto |
 | `tools/cotacoes-investing.py` | Cliente Python (curl_cffi) da API da Investing.com, usado pelo coletor para os pregões de Chicago, B3, dólar e macro |
 | `tools/investing-fontes.json` | Lista dos instrumentos da Investing.com coletados (soja, milho, farelo, café, algodão, Ibovespa, dólar, ouro, Brent e WTI) |
@@ -410,18 +416,21 @@ O arquivo `supabase/migrations/20260101000000_qg_init.sql` cria tudo:
 Aplique no **SQL Editor** do Supabase Dashboard (ou via `supabase db push`) colando o
 conteúdo do arquivo. O script é idempotente: pode rodar de novo sem erro.
 
-> Neste projeto as migrations **já estão aplicadas** no banco `rppoiwrbxqdbtavhgdjk`,
-> com exceção das três mais recentes (13/11/2026). O histórico completo (com o que cada
-> uma faz) está em `supabase/migrations/README.md`.
+> Neste projeto as migrations **estão todas aplicadas** no banco `rppoiwrbxqdbtavhgdjk`.
+> As seis mais recentes (`20261113120000` a `20261113180000`) foram aplicadas em
+> 14/11/2026 e verificadas ao vivo: os privilégios da chave pública estão revogados,
+> as RPCs novas respondem e o dia do site está correto. O histórico completo (com o que
+> cada uma faz) está em `supabase/migrations/README.md`.
 >
-> ⚠️ **Três migrations ainda não aplicadas no banco** (13/11/2026):
-> `20261113120000` (cota diária no dia do site), `20261113140000` (revoga das vistas do
-> painel o acesso da chave pública) e `20261113150000` (gráfico do painel agrupado pelo dia
-> de Mato Grosso). Elas estão prontas e versionadas, mas o CLI do Supabase não está
-> autenticado nesta máquina e a senha do banco não está disponível aqui. Aplique-as no
-> **SQL Editor** do Dashboard (ou com `supabase db push`) antes de publicar: até lá, a
-> chave pública continua lendo `vw_painel_resumo`, o gráfico do painel agrupa pelo dia UTC
-> e a cota diária de anúncios reinicia às 20h (horário de Brasília) em vez de à meia-noite.
+> ✅ **Nenhuma migration pendente.** A Applying pela Management API, sem depender do
+> CLI do Supabase (que não está autenticado nesta máquina) nem da senha do banco.
+>
+> ⚠️ **Um detalhe do fuso que vale registrar**: o Postgres 17 do Supabase **não
+> conhece** o nome `America/Mato_Grosso` (a zona foi renomeada para `America/Cuiaba`
+> quando Mato Grosso aboliu o horário de verão). As migrations usam o deslocamento
+> fixo `(now() AT TIME ZONE interval '-04:00')::date`, que é exatamente o `FUSO_QG`
+> do site e não depende do tzdata do servidor. Usar o nome do fuso derruba a view e a
+> rotação de anúncios com `22023: time zone "America/Mato_Grosso" not recognized`.
 
 ### 2. A chave pública (já preenchida)
 
@@ -469,19 +478,34 @@ VALUES ('<UUID-do-usuario>', 'seu@email.com', 'Seu nome');
 Com isso o login em `/admin` passa. Sem essa linha o painel recusa o acesso com
 “Este usuário não está cadastrado como administrador da Q GRÃOS”.
 
-### 4. Publicar a Edge Function (opcional)
+### 4. A Edge Function `noticias` (publicada)
 
-O código está em `supabase/functions/noticias/index.ts`, mas **a função não foi publicada**
-no projeto — e o site não depende dela: ele lê as notícias direto pela tabela com RLS, e
-**nenhuma página do site chama essa função** (o portal de notícias usa só `/rest/v1/`). Para
-publicar mesmo assim:
+O código está em `supabase/functions/noticias/index.ts` e **a função está publicada** no
+projeto `rppoiwrbxqdbtavhgdjk` (verificado ao vivo: `GET /functions/v1/noticias?limite=3`
+devolve HTTP 200 com o feed). O site **não depende** dela: ele lê as notícias direto pela
+tabela com RLS, e **nenhuma página do site chama essa função** (o portal de notícias usa
+só `/rest/v1/`). Ela é útil para servir o feed por CDN ou de outra página.
+
+Para republicar depois de mexer no código:
 
 ```bash
 supabase functions deploy noticias
 ```
 
 A função serve o feed público com cache (`/functions/v1/noticias?limite=6&categoria=Soja`).
-É útil se você quiser servir o feed por CDN ou de outra página.
+
+> ⚠️ **Duas armadilhas do deploy por API** (as duas quebram a função e só se descobrem
+> olhando a resposta):
+>
+> 1. **O corpo tem que ser o código em texto puro**, não base64. A Management API grava
+>    o `body` como está; em base64 o arquivo é gravado literalmente e a função morre no
+>    boot com `{"code":"BOOT_ERROR"}`. Com o código em texto puro, a mesma chamada
+>    responde HTTP 200.
+> 2. **Não pode haver import remoto.** Neste projeto a saída para a internet está
+>    bloqueada: `import { serve } from "https://deno.land/std@0.168.0/http/server.ts"`
+>    (e também `jsr:@std/http@1/serve`) faz a função subir no deploy e morrer no boot,
+>    com `BOOT_ERROR` — ela não consegue baixar o módulo. Por isso as duas funções
+>    usam `Deno.serve` direto, sem dependência externa.
 
 ### 5. O que fica gravado (LGPD)
 
@@ -647,11 +671,12 @@ apague o preço do dia. O corte é configurável em `QG_LOTE_PARCIAL` (padrão `
 * O IP dos runners do GitHub pode ser bloqueado pelo IMEA, pelo Grão Direto ou pelo
   Investing.com. A trava de lote parcial mantém o preço antigo no ar nesse caso — o painel
   mostra a fonte como *erro* e a página continua com o último valor bom.
-* A Edge Function `cotacoes-trigger` **ainda não foi publicada** — `GET/OPTIONS
-  /functions/v1/cotacoes-trigger` responde `404`. Sem ela, o botão do painel não funciona; a
-  coleta automática (schedule) continua normal. Publicar com
-  `supabase functions deploy cotacoes-trigger` (ver item 9 em *Ajustes que ainda dependem
-  de você*).
+* A Edge Function `cotacoes-trigger` **está publicada** (verificada ao vivo: `POST
+  /functions/v1/cotacoes-trigger` sem sessão responde `401 {"erro":"nao_autenticado"}`, e
+  com sessão de administrador dispara a workflow). O botão do painel funciona; a coleta
+  automática (schedule) continua normal. Para republicar depois de mexer no código:
+  `supabase functions deploy cotacoes-trigger` (ver as duas armadilhas do deploy na
+  seção *4. A Edge Function `noticias`*).
 
 **No painel** (`/admin/`), a aba **Cotações** mostra a tabela toda (fonte, mercado, produto,
 preço, variação, data), o estado de cada fonte e deixa **publicar**, **despublicar** e **excluir**
@@ -718,6 +743,9 @@ Antes de enviar, rode localmente:
 ```bash
 npm run check:all        # estático + servidor + visual (Chrome headless)
 npm run test:supabase    # integração real com o Supabase
+npm run audit:anuncios   # mede o rodízio de anúncios (sem navegador)
+npm run sonda            # estado do banco vivo (permissões, vistas, RPCs)
+npm run prova:contadores # prova de ponta a ponta dos contadores públicos
 ```
 
 ## Publicação
@@ -758,26 +786,22 @@ Depois de publicar:
    Para a **matéria inteira hospedada no site**, cole o texto no campo “Texto completo”.
 7. **Definir a imagem da notícia** — o campo “URL da imagem” vira a capa da matéria e do card.
    Sem imagem, o site mostra o ícone de muda em vez de um espaço quebrado.
-8. **Publicar a Edge Function** — `supabase functions deploy noticias` (opcional: o site
-   funciona sem ela).
-9. **Publicar a Edge Function da coleta** — `supabase functions deploy cotacoes-trigger` e
-   cadastrar as secrets `QG_GITHUB_TOKEN`, `QG_GITHUB_OWNER`, `QG_GITHUB_REPO` e
-   `QG_GITHUB_WORKFLOW` (*Edge Functions → Secrets*). É o que faz o botão
-   **Atualizar cotações agora** do painel funcionar. Sem ela, a coleta automática
-   (GitHub Actions) continua funcionando normalmente.
+8. ~~**Publicar a Edge Function**~~ — **feito em 14/11/2026**: `noticias` está no ar e
+   responde HTTP 200. Para republicar depois de mexer no código:
+   `supabase functions deploy noticias` (o site funciona sem ela).
+9. ~~**Publicar a Edge Function da coleta**~~ — **feito em 14/11/2026**: `cotacoes-trigger`
+   está no ar e as secrets `QG_GITHUB_TOKEN`, `QG_GITHUB_OWNER`, `QG_GITHUB_REPO` e
+   `QG_GITHUB_WORKFLOW` já estão cadastradas no projeto (*Edge Functions → Secrets*). É o
+   que faz o botão **Atualizar cotações agora** do painel funcionar.
    > A função confere o token **dentro dela** (Bearer → `/auth/v1/user` → tabela
    > `administradores`), e não no gateway. É por isso que o `supabase/config.toml` usa
    > `verify_jwt = false`: com `true`, o gateway exigiria o JWT também no preflight
    > `OPTIONS` do CORS, que nunca leva o `Authorization`, o navegador abortaria antes do
    > `POST` e o painel mostraria apenas “Failed to fetch”, sem status nenhum.
-10. **Cadastrar o segredo da coleta no GitHub** — *Settings → Secrets and variables → Actions*:
-   `QG_SUPABASE_SERVICE_ROLE` (a chave service role do Supabase, em
-   *Project Settings → API Keys*). É o único segredo obrigatório para a coleta automática
-   rodar; `QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD` são só a reserva.
-   > **Já funciona pela reserva.** `QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD` já estão
-   > cadastrados e a coleta automática grava no banco por esse caminho. A service role é
-   > o recomendado (trocar a senha do painel não quebra a coleta), mas não é o que
-   > impede a coleta de rodar hoje.
+10. ~~**Cadastrar o segredo da coleta no GitHub**~~ — **feito em 14/11/2026**:
+   `QG_SUPABASE_SERVICE_ROLE` está cadastrado em *Settings → Secrets and variables →
+   Actions*, junto com `QG_ADMIN_EMAIL` e `QG_ADMIN_PASSWORD`. A coleta automática grava
+   pelo caminho da service role, que não depende da senha do painel.
 11. **Primeiro anúncio (opcional)** — a aba “Anúncios” publica espaços patrocinados. Antes,
    combine com o patrocinador a posição (lista de notícias ou fim da matéria), o prazo de
    veiculação, o **peso no rodízio** (a participação dele no revezamento) e a autorização por

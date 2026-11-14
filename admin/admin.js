@@ -713,16 +713,18 @@
         const corpo = byId('adTableBody');
         const vazio = byId('adEmpty');
 
-        /* A visao de desempenho traz as impressões de hoje e a cota
-           restante. As consultas abaixo sao reservas: se o banco ainda
-           nao tiver a visao (ou as colunas novas), o painel continua
-           funcionando com o que existe. */
-        const tentativas = [
-            ['vw_anuncios_desempenho_publica',
+        /* A fonte principal e a RPC anuncios_painel_desempenho: ela
+           devolve as mesmas colunas da visao de desempenho (impressoes
+           de hoje e cota restante) e so responde para o administrador.
+           As consultas abaixo sao reservas: se o banco ainda nao
+           tiver a funcao (ou as visoes com as colunas novas), o painel
+           continua funcionando com o que existe. */
+        const reservas = [
+            ['vw_anuncios_desempenho',
                 'select=id,titulo,empresa,texto,url,imagem_url,posicao,formato,publicado,prioridade,peso,' +
                 'impressoes,impressoes_hoje,cliques,autorizacao,inicio_em,fim_em,limite_impressoes,' +
                 'limite_impressoes_dia,cota_esgotada,criado_em&order=prioridade.desc,criado_em.desc&limit=200'],
-            ['vw_anuncios_desempenho',
+            ['vw_anuncios_desempenho_publica',
                 'select=id,titulo,empresa,texto,url,imagem_url,posicao,formato,publicado,prioridade,peso,' +
                 'impressoes,impressoes_hoje,cliques,autorizacao,inicio_em,fim_em,limite_impressoes,' +
                 'limite_impressoes_dia,cota_esgotada,criado_em&order=prioridade.desc,criado_em.desc&limit=200'],
@@ -738,13 +740,32 @@
         let linhas = null;
         let ultimoErro = null;
 
-        for (const tentativa of tentativas) {
-            try {
-                const resultado = await api.select(tentativa[0], tentativa[1]);
-                linhas = resultado || [];
-                break;
-            } catch (erro) {
-                ultimoErro = erro;
+        /* 1. RPC do painel (segura: so o administrador recebe as linhas).
+           Se ela nao existir no banco ainda, ou se quem chama nao for
+           administrador (401/403), o painel segue para a proxima
+           tentativa sem quebrar. */
+        try {
+            const resultado = await api.rpc('anuncios_painel_desempenho');
+
+            if (Array.isArray(resultado)) {
+                linhas = resultado;
+            } else {
+                ultimoErro = new Error('A função anuncios_painel_desempenho não devolveu a lista de anúncios.');
+            }
+        } catch (erro) {
+            ultimoErro = erro;
+        }
+
+        /* 2. Reservas: as visoes (bancos antigos) e a tabela. */
+        if (linhas === null) {
+            for (const tentativa of reservas) {
+                try {
+                    const resultado = await api.select(tentativa[0], tentativa[1]);
+                    linhas = resultado || [];
+                    break;
+                } catch (erro) {
+                    ultimoErro = erro;
+                }
             }
         }
 

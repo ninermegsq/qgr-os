@@ -329,14 +329,81 @@
 
     /* ---------- Contador de visualizações ---------- */
 
+    /* O id da sessão é o mesmo que o `script.js` cria (e grava em
+       `sessionStorage`, em `qg_sessao`). O banco usa ele para segurar
+       o limite de chamada dos contadores: sem ele, a visualização
+       entra sem teto. Se o `script.js` ainda não rodou (ou o
+       navegador bloqueou o armazenamento), o `sessionStorage` é
+       lido de novo; sem sessão nenhuma, a chamada segue sem id — o
+       banco aceita e conta, como antes. */
+    function idSessao() {
+        const publicado = typeof window !== 'undefined' && window.QGAnalytics;
+
+        if (publicado && typeof publicado.sessionId === 'function') {
+            const id = publicado.sessionId();
+            if (id) return id;
+        }
+
+        try {
+            return window.sessionStorage.getItem('qg_sessao') || null;
+        } catch (erro) {
+            return null;
+        }
+    }
+
     /* Cada abertura da matéria conta uma visualização. O contador é
-       interno (sem pixel de terceiro) e só vale para notícia publicada. */
+       interno (sem pixel de terceiro) e só vale para notícia publicada.
+
+       A chamada manda o id da sessão (teto por sessão no banco). Se o
+       banco ainda não conhecer esse parâmetro — a migration
+       20261113180000 ainda não foi aplicada — o PostgREST responde
+       PGRST202 e a visualização deixaria de ser contada. Nesse caso a
+       chamada é refeita sem a sessão: o contador volta a funcionar e
+       o teto do banco entra sozinho quando a migration for aplicada.
+
+       A decisão fica guardada em `rpcSemSessao`: depois do primeiro
+       PGRST202, as próximas visualizações já vão direto pelo caminho
+       sem sessão, sem gastar uma requisição que vai falhar. */
+    let rpcSemSessao = false;
+
     function registrarVisualizacao(noticia) {
         if (!SUPABASE_ATIVO || !noticia || !noticia.id) return;
 
-        SUPABASE.rpc('registrar_visualizacao_noticia', { p_id: noticia.id })
+        const sessao = idSessao();
+
+        if (!sessao || rpcSemSessao) {
+            SUPABASE.rpc('registrar_visualizacao_noticia', { p_id: noticia.id })
+                .catch(function (erro) {
+                    console.warn('Q GRAOS: não foi possível contar a visualização.',
+                        erro && erro.message);
+                });
+            return;
+        }
+
+        SUPABASE.rpc('registrar_visualizacao_noticia', {
+            p_id: noticia.id,
+            p_sessao_id: sessao
+        })
             .catch(function (erro) {
-                console.warn('Q GRAOS: não foi possível contar a visualização.', erro && erro.message);
+                const mensagem = (erro && erro.message) || '';
+                const semParametro = mensagem.indexOf('PGRST202') !== -1 ||
+                    mensagem.indexOf('p_sessao_id') !== -1;
+
+                if (!semParametro) {
+                    console.warn('Q GRAOS: não foi possível contar a visualização.', mensagem);
+                    return;
+                }
+
+                rpcSemSessao = true;
+                console.warn('Q GRAOS: o banco ainda não aceita p_sessao_id em ' +
+                    'registrar_visualizacao_noticia (migration 20261113180000 pendente). ' +
+                    'Contando sem o teto de sessão.');
+
+                SUPABASE.rpc('registrar_visualizacao_noticia', { p_id: noticia.id })
+                    .catch(function (erroInterno) {
+                        console.warn('Q GRAOS: não foi possível contar a visualização.',
+                            erroInterno && erroInterno.message);
+                    });
             });
     }
 

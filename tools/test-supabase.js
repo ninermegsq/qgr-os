@@ -265,9 +265,23 @@ async function principal() {
         detalheErro(duplicado));
 
     /* 7. RPC de clique em noticia ------------------------------------- */
-    const clique = await chamar('POST', '/rest/v1/rpc/clicar_noticia', {
-        p_id: '00000000-0000-4000-8000-000000000003'
+    /* O parametro p_sessao_id (teto por sessao) so existe depois
+     * da migration 20261113180000. Ate la a RPC e a de uma
+     * parametro so. O teste aceita as duas formas e anota qual
+     * esta valendo no banco. */
+    const comSessao = await chamar('POST', '/rest/v1/rpc/clicar_noticia', {
+        p_id: '00000000-0000-4000-8000-000000000003',
+        p_sessao_id: 'sonda-teste-automatico'
     });
+
+    const sessaoSuportada = comSessao.status !== 404 ||
+        String((comSessao.dados && comSessao.dados.message) || '').indexOf('p_sessao_id') === -1;
+
+    const clique = sessaoSuportada
+        ? comSessao
+        : await chamar('POST', '/rest/v1/rpc/clicar_noticia', {
+            p_id: '00000000-0000-4000-8000-000000000003'
+        });
 
     conferir('RPC clicar_noticia responde sem erro',
         clique.status === 200 || clique.status === 204, 'HTTP ' + clique.status);
@@ -289,7 +303,6 @@ async function principal() {
     conferir('RPC registrar_visualizacao_noticia responde sem erro',
         visualizacao.status === 200 || visualizacao.status === 204,
         'HTTP ' + visualizacao.status);
-
     /* 7b. Anuncios: leitura publica, gravacao bloqueada e contadores -- */
     const anuncios = await chamar(
         'GET',
@@ -507,6 +520,100 @@ async function principal() {
     conferir('RPC registrar_lead recusa e-mail invalido',
         invalido.status >= 400, 'HTTP ' + invalido.status);
 
+    /* 8b. As vistas do painel nao podem ser lidas pela chave publica ---
+       O Postgres da a view o privilegio padrao "SELECT ... TO PUBLIC":
+       sem o REVOKE, o anon le os numeros do painel (total de leads,
+       visitas, grafico). A migration 20261113140000 fecha isso e a
+       20261113150000 refaz o revoke nas vistas do dia.
+
+       O teste roda SEM login de administrador: o bloqueio do anon e
+       uma propriedade do banco, nao do painel.
+
+       404 = a view nao existe no banco (migration ainda nao aplicada):
+       o anon nao le nada, entao nao vaza - mas a view falta.
+       401/403 = o privilegio foi revogado (estado correto).
+       200 = VAZOU: os numeros do painel ficaram publicos. */
+    const vistasPainel = [
+        'vw_painel_resumo',
+        'vw_leads_por_dia',
+        'vw_visitas_por_dia',
+        'vw_visitas_por_tipo',
+        'vw_anuncios_desempenho',
+        'vw_anuncios_desempenho_publica'
+    ];
+
+    const vistasVazando = [];
+    const vistasAusentes = [];
+
+    for (const vista of vistasPainel) {
+        const resposta = await fetch(CONFIG.url + '/rest/v1/' + vista, {
+            headers: cabecalhos()
+        });
+
+        const negado = resposta.status === 401 || resposta.status === 403;
+        const inexistente = resposta.status === 404;
+
+        if (!negado && !inexistente) {
+            vistasVazando.push(vista + ' (HTTP ' + resposta.status + ')');
+        }
+
+        if (inexistente) {
+            vistasAusentes.push(vista);
+        }
+
+        conferir('A chave anonima nao le ' + vista, negado || inexistente,
+            'HTTP ' + resposta.status +
+            (negado ? ' (privilegio revogado)' : (inexistente ? ' (view ainda nao criada)' : ' (VAZOU)')));
+    }
+
+    if (vistasVazando.length) {
+        console.log('  [ALERTA] Vazamento real de dados do painel para a chave publica: ' +
+            vistasVazando.join(', '));
+    }
+    if (vistasAusentes.length) {
+        console.log('  [aviso] Views ainda nao criadas no banco (migration pendente): ' +
+            vistasAusentes.join(', '));
+    }
+
+    /* 8c. A chave anonima nao pode escrever nas tabelas de dado -------
+       O Postgres concede `ALL` nas tabelas ao papel `anon` em um
+       projeto novo. A RLS segura a linha enquanto existe policy
+       correta, mas o privilegio nao deve existir. A migration
+       20261113160000 revoga o privilegio de tabela.
+
+       O teste usa `Prefer: tx=rollback`: a escrita nunca fica no
+       banco, mesmo que o privilegio exista.
+
+       401/403 = privilege revogado (estado correto).
+       204 = privilege de tabela EXISTE (vazamento de privilegio,
+       mesmo que a RLS tenha barrado a linha). */
+    const escritasAnon = [
+        ['POST', '/rest/v1/leads', { nome: 'Sonda', email: 'sonda@qgraos.invalid', telefone: '66999990000' }],
+        ['POST', '/rest/v1/visitas', { tipo: 'pageview', path: '/sonda', visitante_id: VISITANTE_TESTE, sessao_id: VISITANTE_TESTE }],
+        ['POST', '/rest/v1/administradores', { email: 'sonda@qgraos.invalid' }],
+        ['PATCH', '/rest/v1/leads?id=eq.00000000-0000-4000-8000-0000000000fd', { nome: 'Sonda' }],
+        ['DELETE', '/rest/v1/leads?id=eq.00000000-0000-4000-8000-0000000000fd'],
+        ['DELETE', '/rest/v1/visitas?id=eq.999999999'],
+        ['DELETE', '/rest/v1/administradores?id=eq.00000000-0000-4000-8000-0000000000fb']
+    ];
+
+    for (const [metodo, caminho, corpo] of escritasAnon) {
+        const resposta = await fetch(CONFIG.url + caminho, {
+            method: metodo,
+            headers: Object.assign({}, cabecalhos(), { Prefer: 'tx=rollback' }),
+            body: JSON.stringify(corpo),
+            cache: 'no-store'
+        });
+
+        const negado = resposta.status === 401 || resposta.status === 403;
+        const semPrivilegio = resposta.status === 404;
+
+        conferir('A chave anonima nao escreve em ' + caminho.split('?')[0].replace('/rest/v1/', '') +
+            ' (' + metodo + ')', negado || semPrivilegio,
+            'HTTP ' + resposta.status +
+            (negado ? ' (negado)' : (semPrivilegio ? ' (sem privilegio)' : ' (privilegio de tabela existe)')));
+    }
+
     /* 9. Painel: login do administrador e leitura dos dados ----------- */
     const credenciais = credenciaisAdmin();
 
@@ -560,37 +667,9 @@ async function principal() {
                 resumo.status === 200 && Array.isArray(linhasResumo) && linhasResumo.length === 1,
                 'HTTP ' + resumo.status);
 
-            /* As vistas do painel nao podem ser lidas pela chave publica
-               (o papel anon). O Postgres da a view o privilegio padrao
-               "SELECT ... TO PUBLIC": sem o REVOKE, o anon le os
-               numeros do painel. A migration 20261113140000 fecha
-               isso. */
-            const vistasPainel = [
-                'vw_painel_resumo',
-                'vw_leads_por_dia',
-                'vw_visitas_por_dia',
-                'vw_visitas_por_tipo',
-                'vw_anuncios_desempenho',
-                'vw_anuncios_desempenho_publica'
-            ];
-
-            for (const vista of vistasPainel) {
-                const resposta = await fetch(CONFIG.url + '/rest/v1/' + vista, {
-                    headers: cabecalhos()
-                });
-
-                /* 404 = a view nao existe no banco (migration ainda nao
-                   aplicada): o anon nao le nada. 401/403 = o privilegio
-                   foi revogado. 200 = VAZOU: o privilege padrao PUBLIC
-                   da view entregou os numeros do painel a chave
-                   publica. */
-                const bloqueio = resposta.status === 401 ||
-                    resposta.status === 403 ||
-                    resposta.status === 404;
-
-                conferir('A chave anonima nao le ' + vista, bloqueio,
-                    'HTTP ' + resposta.status + (bloqueio ? ' (bloqueada)' : ' (VAZOU)'));
-            }
+            /* As vistas do painel sao conferidas fora deste bloco: o
+               bloqueio da chave anonima nao depende do login do
+               administrador. */
 
             /* Publicar uma noticia de teste pelo painel e ver no site --- */
             const tituloTeste = 'Notícia de teste automático ' + new Date().toISOString();

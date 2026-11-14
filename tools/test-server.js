@@ -135,7 +135,9 @@ async function main() {
        - byte nulo no caminho derrubava o processo (fs.stat lanca excecao
          sincronica) e o servidor morria;
        - o guard de path traversal comparava prefixo de string e aceitava
-         um diretorio vizinho cujo nome comecasse com o nome da pasta. */
+         um diretorio vizinho cujo nome comecasse com o nome da pasta;
+       - um caminho que sai da raiz tem de ser recusado mesmo quando a
+         pasta existe de verdade (teste logo abaixo). */
 
     const nulo = await request('/%00x.txt');
     if (nulo.status === 400) {
@@ -151,18 +153,26 @@ async function main() {
         failures.push('GET /../../../../Windows/...  ->  ' + traversal.status + ' (esperava 403)');
     }
 
-    const vizinho = path.join(path.dirname(ROOT), path.basename(ROOT) + '__teste_vizinho');
+    /* O teste do diretorio vizinho fica DENTRO do projeto (em tools/):
+       criar pasta fora da raiz suja o desktop do usuario e o git status
+       do repositorio. O sentido do teste e o mesmo: o servidor tem de
+       recusar um caminho que sai da raiz, mesmo quando a pasta vizinha
+       existe de verdade. */
+    const vizinho = path.join(ROOT, 'tools', '__teste_vizinho');
     fs.mkdirSync(vizinho, { recursive: true });
     fs.writeFileSync(path.join(vizinho, 'segredo.txt'), 'conteudo-que-nao-pode-vazar', 'utf8');
 
-    const fuga = await request('/../' + encodeURIComponent(path.basename(vizinho)) + '/segredo.txt');
-    if (fuga.status === 403) {
-        results.push('GET /../<pasta vizinha>/segredo.txt  ->  403 (diretorio vizinho bloqueado)');
-    } else {
-        failures.push('GET /../<pasta vizinha>/segredo.txt  ->  ' + fuga.status + ' (esperava 403)');
+    try {
+        const fuga = await request('/../tools/' + encodeURIComponent(path.basename(vizinho)) + '/segredo.txt');
+        if (fuga.status === 403) {
+            results.push('GET /../tools/<pasta vizinha>/segredo.txt  ->  403 (diretorio vizinho bloqueado)');
+        } else {
+            failures.push('GET /../tools/<pasta vizinha>/segredo.txt  ->  ' + fuga.status + ' (esperava 403)');
+        }
+    } finally {
+        // A limpeza acontece mesmo se a requisicao estourar o tempo limite
+        fs.rmSync(vizinho, { recursive: true, force: true });
     }
-
-    fs.rmSync(vizinho, { recursive: true, force: true });
 
     // O servidor tem de continuar vivo depois das requisicoes hostis
     const vivo = await request('/');

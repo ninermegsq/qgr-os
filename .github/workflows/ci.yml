@@ -15,6 +15,10 @@ jobs:
   check:
     name: Checagens estaticas
     runs-on: ubuntu-latest
+    # Necessario para o passo do sitemap fazer o commit automatico
+    # do lastmod quando a data do arquivo ficou desatualizada.
+    permissions:
+      contents: write
 
     steps:
       - name: Baixar o codigo
@@ -30,3 +34,68 @@ jobs:
 
       - name: Rodar as checagens
         run: npm run check
+
+      - name: Conferir o sitemap
+        # O sitemap.xml e versionado no repositorio e o lastmod dele
+        # precisa refletir a data real da ultima mudanca das paginas.
+        #
+        # Um "git diff --exit-code" puro seria vermelho em quase todo
+        # push: o build-sitemap.js carimba a data de HOJE, entao o
+        # arquivo mudaria so porque o dia virou. A conferencia e feita
+        # em tres etapas:
+        #   1. a estrutura (paginas, URLs, changefreq, priority) tem de
+        #      ser identica a do arquivo versionado;
+        #   2. o lastmod versionado nao pode ter parado de acompanhar a
+        #      data da ultima mudanca de pagina;
+        #   3. se so a data mudou, o passo regera e faz commit
+        #      automatico (lastmod congelado e o defeito a evitar).
+        # Qualquer outra divergencia falha o build.
+        run: |
+          TMP="${RUNNER_TEMP:-$(mktemp -d)}"
+
+          # O sitemap precisa estar versionado: e ele que guarda o
+          # lastmod com a data real da ultima mudanca das paginas.
+          if ! git ls-files --error-unmatch sitemap.xml > /dev/null 2>&1; then
+            echo "::error::O sitemap.xml nao esta versionado no repositorio. Rode npm run sitemap e faça o commit."
+            exit 1
+          fi
+
+          node tools/build-sitemap.js
+          cp sitemap.xml "$TMP/sitemap-novo.xml"
+          git checkout -- sitemap.xml
+          cp sitemap.xml "$TMP/sitemap-versionado.xml"
+
+          # 1) Estrutura do sitemap (sem a data): URL trocada, pagina
+          #    nova sem entrar no sitemap ou gerador quebrado.
+          sed 's|<lastmod>[^<]*</lastmod>|<lastmod/>|' "$TMP/sitemap-novo.xml" > "$TMP/novo.txt"
+          sed 's|<lastmod>[^<]*</lastmod>|<lastmod/>|' "$TMP/sitemap-versionado.xml" > "$TMP/versionado.txt"
+
+          if ! diff -q "$TMP/novo.txt" "$TMP/versionado.txt" > /dev/null; then
+            echo "::error::A estrutura do sitemap.xml mudou (paginas ou URLs). Rode npm run sitemap e faça o commit."
+            exit 1
+          fi
+
+          # 2) O lastmod do arquivo versionado precisa ser posterior (ou
+          #    igual) a data da ultima mudanca das paginas do site.
+          ULTIMA_PAGINA=$(git log -1 --no-merges --format=%cs -- '*.html')
+          ULTIMO_LASTMOD=$(grep -o '<lastmod>[^<]*' "$TMP/sitemap-versionado.xml" | head -n 1 | cut -d'>' -f2)
+
+          if [ -n "$ULTIMA_PAGINA" ] && [ "$ULTIMA_PAGINA" \> "$ULTIMO_LASTMOD" ]; then
+            echo "::error::Uma pagina publica mudou em $ULTIMA_PAGINA, depois do lastmod $ULTIMO_LASTMOD. Rode npm run sitemap e faça o commit."
+            exit 1
+          fi
+
+          # 3) Estrutura igual e data em dia: so falta carimbar a data de
+          #    hoje, quando ela passou do lastmod versionado.
+          node tools/build-sitemap.js
+
+          if git diff --quiet -- sitemap.xml; then
+            echo "sitemap.xml em dia (lastmod: $ULTIMO_LASTMOD)"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sitemap.xml
+          git commit -m "chore: atualiza o lastmod do sitemap.xml"
+          git push

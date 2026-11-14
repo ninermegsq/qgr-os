@@ -54,7 +54,7 @@
         }
     </script>
 
-    <link rel="stylesheet" href="style.css?v=17">
+    <link rel="stylesheet" href="style.css?v=18">
 
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230F3D2E'/><circle cx='31' cy='29' r='15' fill='none' stroke='%23D4AF37' stroke-width='6'/><path d='M40 39l11 12' stroke='%23D4AF37' stroke-width='6' stroke-linecap='round'/></svg>">
@@ -210,7 +210,7 @@
                 <p>
                     Os espaços patrocinados não são “primeiro a chegar, primeiro a levar”. Os anúncios
                     publicados, dentro do prazo e com cota disponível entram numa <strong>fila de
-                    rodízio</strong> e se revezam.
+                    rodízio</strong> e se revezam na proporção do peso de cada anunciante.
                 </p>
                 <ul>
                     <li>
@@ -228,8 +228,10 @@
                         os anunciantes.
                     </li>
                     <li>
-                        Ao navegar, o próximo espaço mostra o próximo da fila, sem repetir o mesmo
-                        anunciante duas vezes seguidas.
+                        Ao navegar, o próximo espaço mostra o próximo da fila. O mesmo anunciante não
+                        ocupa dois espaços seguidos quando os pesos dos concorrentes permitem; se o peso
+                        dele for maior que a soma dos outros, a repetição é inevitável — aí o peso
+                        manda.
                     </li>
                     <li>
                         Anúncio pausado, fora do prazo ou com a cota esgotada sai da fila
@@ -314,7 +316,7 @@
 
     <script src="site.config.js?v=1" defer></script>
     <script src="supabase-api.js?v=2" defer></script>
-    <script src="script.js?v=12" defer></script>
+    <script src="script.js?v=18" defer></script>
 </body>
 
 </html>

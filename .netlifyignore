@@ -1,0 +1,48 @@
+# ------------------------------------------------------------------
+# O que NAO vai para a Netlify
+#
+# O site e estatico e a pasta de publicacao e a raiz do projeto
+# (netlify.toml: publish = "."), entao tudo que estiver aqui seria
+# publicado em https://qgraos.com.br/ sem filtro. Este arquivo segura
+# o que e interno do repositorio e nao faz parte do site.
+#
+# NADA do site publico pode ser listado aqui: os HTML, o CSS, os JS,
+# as imagens da pasta assets/, o robots.txt, o sitemap.xml e a pasta
+# admin/ precisam ser publicados normalmente.
+# ------------------------------------------------------------------
+
+# Historico e configuracao do Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# Segredos e ambiente
+.qg-admin.json
+.env
+.env.*
+
+# Dependencias do npm
+node_modules
+
+# Ferramentas de desenvolvimento (scripts de coleta, testes, capturas)
+tools
+
+# Banco: migrations e Edge Functions (so o codigo roda no Supabase)
+supabase
+
+# Manifesto do npm (o site nao e um pacote)
+package.json
+package-lock.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Configuracao local do Claude
+.claude
+
+# Pastas de publicacao/cache de outras ferramentas
+.netlify
+.vercel
+.cache

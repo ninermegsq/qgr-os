@@ -9,4 +9,12 @@ Disallow: /package.json
 Disallow: /package-lock.json
 Disallow: /server.js
 
+# Arquivos ocultos e segredos (histórico do Git, credenciais, ambiente)
+Disallow: /.git/
+Disallow: /.qg-admin.json
+Disallow: /.env
+Disallow: /.env.
+Disallow: /.gitignore
+Disallow: /.gitattributes
+
 Sitemap: https://qgraos.com.br/sitemap.xml

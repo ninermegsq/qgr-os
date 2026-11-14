@@ -33,6 +33,8 @@
  *   QG_INVESTING_FONTES    caminho de um JSON com a lista de instrumentos
  *   QG_INVESTING_MODELO    modelo de URL do Investing (usa {id})
  *   QG_PYTHON              executavel do Python (padrão: python)
+ *   QG_TIMEOUT_MS          tempo limite de cada requisição (padrão: 20000)
+ *   QG_TENTATIVAS          repetições por requisição (padrão: 3)
  *
  * OPÇÕES
  *   --dry-run             não grava nada, só mostra o que seria gravado
@@ -227,7 +229,51 @@ function textoValor(valor) {
 
 /* ---------- rede ---------- */
 
-async function buscarTexto(url, cabecalhos) {
+/* Tempo limite de cada requisição. Sem isso, uma fonte que trava
+   segura a coleta inteira até a workflow estourar o tempo. */
+const TIMEOUT_REQUISICAO = Number(process.env.QG_TIMEOUT_MS || 20000);
+
+/* Quantas vezes a mesma URL é tentada (a primeira já conta). */
+const TENTATIVAS_MAXIMAS = Number(process.env.QG_TENTATIVAS || 3);
+
+/* Espera antes de cada repetição: 1s, 2s, 4s. */
+const ESPERA_BACKOFF = [1000, 2000, 4000];
+
+/* Uma requisição com tempo limite. O timer é sempre limpo, mesmo
+   quando a requisição dá erro. */
+async function requisicaoComTempoLimite(url, opcoes) {
+    const controlador = new AbortController();
+    const timer = setTimeout(() => controlador.abort(), TIMEOUT_REQUISICAO);
+
+    try {
+        return await fetch(url, Object.assign({}, opcoes, { signal: controlador.signal }));
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/* Espera entre as tentativas (backoff exponencial). */
+function dormir(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/* Nome curto da fonte, tirado do host, para as mensagens de erro. */
+function rotuloDaUrl(url) {
+    const achado = /^https?:\/\/([^/]+)/i.exec(String(url || ''));
+
+    return achado ? achado[1] : 'fonte';
+}
+
+/* Baixa o texto de uma URL, com tempo limite e repetição.
+ *
+ * Só repete em erro de rede, tempo esgotado, HTTP 5xx e HTTP 429:
+ * nesses casos a falha é do servidor ou da rede e a segunda chances
+ * resolve. HTTP 4xx (fora o 429) não repete — a URL está errada ou o
+ * recurso não existe, e repetir só gasta tempo.
+ *
+ * A mensagem de erro final identifica a fonte, a URL e quantas
+ * tentativas foram feitas. */
+async function buscarTexto(url, cabecalhos, rotulo) {
     const opcoes = {
         headers: Object.assign({
             'User-Agent': 'Mozilla/5.0 (compatible; QG-RAOS/1.0; +https://qgraos.com.br)',
@@ -236,14 +282,51 @@ async function buscarTexto(url, cabecalhos) {
         redirect: 'follow'
     };
 
-    const resposta = await fetch(url, opcoes);
-    const texto = await resposta.text();
+    const nome = rotulo || rotuloDaUrl(url);
+    let ultimaFalha = '';
 
-    return { status: resposta.status, texto: texto };
+    for (let tentativa = 1; tentativa <= TENTATIVAS_MAXIMAS; tentativa++) {
+        if (tentativa > 1) {
+            const espera = ESPERA_BACKOFF[Math.min(tentativa - 2, ESPERA_BACKOFF.length - 1)];
+
+            await dormir(espera);
+        }
+
+        let erro = null;
+        let status = 0;
+
+        try {
+            const resposta = await requisicaoComTempoLimite(url, opcoes);
+
+            status = resposta.status;
+
+            if (status >= 200 && status < 300) {
+                return { status: status, texto: await resposta.text() };
+            }
+        } catch (capturado) {
+            erro = capturado;
+        }
+
+        /* 4xx sem 429: repetir não resolve. */
+        if (!erro && status >= 400 && status < 500 && status !== 429) {
+            throw new Error(nome + ': HTTP ' + status + ' ao buscar ' + url +
+                ' (1 tentativa)');
+        }
+
+        /* Erro de rede, tempo esgotado, 5xx ou 429: tenta de novo. */
+        ultimaFalha = erro
+            ? 'erro de rede' +
+              (erro && erro.name === 'AbortError' ? ' (tempo esgotado)' : '') +
+              (erro && erro.message ? ': ' + erro.message : '')
+            : 'HTTP ' + status;
+    }
+
+    throw new Error(nome + ': ' + ultimaFalha + ' ao buscar ' + url +
+        ' (' + TENTATIVAS_MAXIMAS + ' tentativas)');
 }
 
-async function buscarJson(url, cabecalhos) {
-    const resposta = await buscarTexto(url, cabecalhos);
+async function buscarJson(url, cabecalhos, rotulo) {
+    const resposta = await buscarTexto(url, cabecalhos, rotulo);
 
     let dados = null;
     try {
@@ -323,7 +406,7 @@ async function nomesDosIndicadores(cadeia) {
 
     try {
         const url = CONFIG.imeaBase + '/cadeias/' + encodeURIComponent(cadeia) + '/indicadores';
-        const resposta = await buscarJson(url);
+        const resposta = await buscarJson(url, null, 'imea');
 
         if (!Array.isArray(resposta.dados)) return mapa;
 
@@ -375,7 +458,7 @@ async function nomesDasCadeias() {
     const mapa = {};
 
     try {
-        const resposta = await buscarJson(CONFIG.imeaBase + '/cadeias');
+        const resposta = await buscarJson(CONFIG.imeaBase + '/cadeias', null, 'imea');
 
         if (!Array.isArray(resposta.dados)) return mapa;
 
@@ -403,7 +486,7 @@ async function coletarImea() {
         let registros = null;
 
         try {
-            const resposta = await buscarJson(url);
+            const resposta = await buscarJson(url, null, 'imea');
 
             if (resposta.status < 200 || resposta.status >= 300) {
                 mensagens.push('cadeia ' + cadeia + ': HTTP ' + resposta.status);
@@ -698,7 +781,7 @@ async function coletarGraoDireto() {
         const url = 'https://www.graodireto.com.br/quotations/' + info.pagina;
 
         try {
-            const resposta = await buscarTexto(url);
+            const resposta = await buscarTexto(url, null, 'grao_direto');
 
             if (resposta.status < 200 || resposta.status >= 300) {
                 mensagens.push(info.nome + ': HTTP ' + resposta.status);
@@ -1132,15 +1215,128 @@ function cabecalhosAdmin(credencial, extra) {
     }, extra || {});
 }
 
-async function gravarCotacoes(credencial, itens) {
+/* O PostgREST corta a resposta em 1000 linhas. A leitura vem em
+   páginas de 500, com o offset avançando: sem isso, o coletor só
+   enxerga a primeira página e o resto fica para sempre no ar. */
+const LIMITE_PAGINA = 500;
+
+/* A URL do PostgREST não aguenta milhares de ids: as atualizações
+   saem em grupos. */
+const TAMANHO_LOTE = 100;
+
+/* Divide a lista em grupos de tamanho fixo. */
+function fatiar(lista, tamanho) {
+    const grupos = [];
+
+    for (let i = 0; i < lista.length; i += tamanho) {
+        grupos.push(lista.slice(i, i + tamanho));
+    }
+
+    return grupos;
+}
+
+/* Lê todas as linhas de uma consulta do PostgREST, página por
+   página. A última página vem menor que o limite: acabou. */
+async function lerLinhas(url, credencial) {
+    const linhas = [];
+    let offset = 0;
+
+    for (;;) {
+        const separador = url.indexOf('?') === -1 ? '?' : '&';
+        const pagina = await fetch(
+            url + separador + 'limit=' + LIMITE_PAGINA + '&offset=' + offset,
+            { headers: cabecalhosAdmin(credencial) }
+        );
+
+        if (!pagina.ok) {
+            throw new Error('leitura no banco falhou: HTTP ' + pagina.status);
+        }
+
+        const dados = await pagina.json();
+
+        if (!Array.isArray(dados)) {
+            throw new Error('leitura no banco devolveu um formato inesperado');
+        }
+
+        linhas.push.apply(linhas, dados);
+        offset += dados.length;
+
+        if (dados.length < LIMITE_PAGINA) break;
+    }
+
+    return linhas;
+}
+
+/* O estado de publicação das cotações que já estão na tabela, por
+   fonte: símbolo -> publicado (true/false).
+ *
+ * Serve para distinguir a cotação nova da cotação que já está no ar:
+ * a que já está publicada continua publicada (o preço muda, mas o que
+ * está no ar continua no ar) e a nova entra com publicado=false,
+ * para só entrar no ar depois que a trava de lote passar.
+ *
+ * Devolve null quando a leitura falha: aí o estado do que está no
+ * ar é desconhecido e o coletor avisa antes de gravar. */
+async function publicacaoExistente(credencial, fontes) {
+    const mapa = {};
+    const lista = [];
+
+    fontes.forEach(fonte => {
+        if (!fonte || lista.indexOf(fonte) !== -1) return;
+
+        lista.push(fonte);
+        mapa[fonte] = {};
+    });
+
+    if (!lista.length) return mapa;
+
+    try {
+        const linhas = await lerLinhas(
+            CONFIG.url + '/rest/v1/cotacoes?select=fonte,simbolo,publicado&fonte=in.(' +
+            lista.join(',') + ')', credencial);
+
+        linhas.forEach(linha => {
+            if (!mapa[linha.fonte]) return;
+
+            mapa[linha.fonte][linha.simbolo] = ehVerdadeiro(linha.publicado);
+        });
+    } catch (erro) {
+        return null;
+    }
+
+    return mapa;
+}
+
+/* O PostgREST devolve boolean, mas a leitura em texto pode vir como
+   "true"/"false": normaliza os dois para boolean. */
+function ehVerdadeiro(valor) {
+    if (valor === true || valor === 'true') return true;
+    if (valor === false || valor === 'false' || valor === null || valor === undefined) return false;
+
+    return Boolean(valor);
+}
+
+async function gravarCotacoes(credencial, itens, publicacao) {
     if (!itens.length) return 0;
+
+    /* As cotações que já estão publicadas continuam publicadas: o
+       preço muda, mas o que está no ar continua no ar. As novas
+       entram com publicado=false e só entram no ar depois que a
+       trava de lote passar.
+       Sem o estado anterior (leitura falhou), vale o comportamento
+       antigo: gravar e deixar a trava decidir. */
+    const linhas = itens.map(item => Object.assign({}, item, {
+        publicado: publicacao
+            ? !!publicacao[item.fonte] && publicacao[item.fonte][item.simbolo] === true
+            : true
+    }));
 
     const resposta = await fetch(
         CONFIG.url + '/rest/v1/cotacoes?on_conflict=fonte,simbolo',
         {
             method: 'POST',
             headers: cabecalhosAdmin(credencial, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
-            body: JSON.stringify(itens)
+            body: JSON.stringify(linhas)
         }
     );
 
@@ -1149,7 +1345,7 @@ async function gravarCotacoes(credencial, itens) {
         throw new Error('gravacao das cotacoes falhou: HTTP ' + resposta.status + ' ' + texto.slice(0, 300));
     }
 
-    return itens.length;
+    return linhas.length;
 }
 
 async function contarPublicadas(credencial, fonte) {
@@ -1166,17 +1362,56 @@ async function contarPublicadas(credencial, fonte) {
     return Array.isArray(linhas) ? linhas.length : -1;
 }
 
+/* Publica as cotações do lote (publicado=true).
+ *
+ * Roda depois da trava de lote parcial: enquanto o lote não for
+ * aceito, as cotações novas ficam fora do ar. Só as linhas deste
+ * lote são publicadas. */
+async function publicarLote(credencial, resultado) {
+    const simbolos = resultado.itens.map(item => item.simbolo);
+
+    if (!simbolos.length) return 0;
+
+    let publicadas = 0;
+
+    for (const grupo of fatiar(simbolos, TAMANHO_LOTE)) {
+        const lista = grupo.map(simbolo => encodeURIComponent(simbolo)).join(',');
+
+        const resposta = await fetch(
+            CONFIG.url + '/rest/v1/cotacoes?fonte=eq.' + encodeURIComponent(resultado.fonte) +
+            '&simbolo=in.(' + lista + ')',
+            {
+                method: 'PATCH',
+                headers: cabecalhosAdmin(credencial, { Prefer: 'return=minimal' }),
+                body: JSON.stringify({ publicado: true })
+            }
+        );
+
+        if (!resposta.ok) {
+            throw new Error('publicacao das cotacoes falhou: HTTP ' + resposta.status);
+        }
+
+        publicadas += grupo.length;
+    }
+
+    return publicadas;
+}
+
 async function despublicarAntigas(credencial, fonte, itens) {
-    const existentes = await fetch(
-        CONFIG.url + '/rest/v1/cotacoes?select=id,simbolo&fonte=eq.' + encodeURIComponent(fonte),
-        { headers: cabecalhosAdmin(credencial) }
-    );
+    /* A leitura é paginada: o PostgREST corta a resposta em 1000
+       linhas, e sem paginação as cotações antigas que sumiram da
+       fonte (que ficam depois da primeira página) nunca sairiam do
+       ar. */
+    let linhas = [];
 
-    if (!existentes.ok) return 0;
-
-    const linhas = await existentes.json();
-
-    if (!Array.isArray(linhas)) return 0;
+    try {
+        linhas = await lerLinhas(
+            CONFIG.url + '/rest/v1/cotacoes?select=id,simbolo&fonte=eq.' + encodeURIComponent(fonte),
+            credencial
+        );
+    } catch (erro) {
+        return 0;
+    }
 
     const atuais = {};
     itens.forEach(item => { atuais[item.simbolo] = true; });
@@ -1187,16 +1422,31 @@ async function despublicarAntigas(credencial, fonte, itens) {
 
     if (!ids.length) return 0;
 
-    const resposta = await fetch(
-        CONFIG.url + '/rest/v1/cotacoes?id=in.(' + ids.join(',') + ')',
-        {
-            method: 'PATCH',
-            headers: cabecalhosAdmin(credencial, { Prefer: 'return=minimal' }),
-            body: JSON.stringify({ publicado: false })
-        }
-    );
+    let despublicadas = 0;
 
-    return resposta.ok ? ids.length : 0;
+    /* A URL não aguenta milhares de ids: a despublicação sai em
+       grupos. */
+    for (const grupo of fatiar(ids, TAMANHO_LOTE)) {
+        const resposta = await fetch(
+            CONFIG.url + '/rest/v1/cotacoes?id=in.(' + grupo.join(',') + ')',
+            {
+                method: 'PATCH',
+                headers: cabecalhosAdmin(credencial, { Prefer: 'return=minimal' }),
+                body: JSON.stringify({ publicado: false })
+            }
+        );
+
+        if (!resposta.ok) {
+            console.log('  [AVISO] Nao foi possivel tirar do ar um grupo de ' +
+                grupo.length + ' cotacao(oes) antiga(s) de ' + fonte +
+                ' (HTTP ' + resposta.status + ').');
+            continue;
+        }
+
+        despublicadas += grupo.length;
+    }
+
+    return despublicadas;
 }
 
 async function gravarFonte(credencial, resultado) {
@@ -1310,6 +1560,19 @@ function gerarSql(itens, resultados) {
     ].join('\n');
 }
 
+/* Resumo do que deu errado nas fontes, para a mensagem final.
+   Nao traz segredo nenhum: so o nome da fonte e o motivo da falha. */
+function relatorioDeFalha(resultados) {
+    const comErro = resultados.filter(resultado => resultado.erro);
+
+    if (comErro.length) {
+        return comErro.map(resultado =>
+            (resultado.nome || resultado.fonte || 'fonte') + ': ' + resultado.erro).join(' | ');
+    }
+
+    return 'as fontes nao devolveram nenhuma cotacao';
+}
+
 /* Resumo do que seria gravado (modo --dry-run). */
 function imprimirResumo(itens) {
     const porFonte = {};
@@ -1399,6 +1662,14 @@ async function principal() {
             imprimirResumo(todas);
         }
 
+        /* Nenhuma fonte entregou item: a coleta falhou, e o codigo de
+           saida precisa dizer isso (vale para o dry-run tambem: ele
+           serve para conferir se as fontes responderam). */
+        if (!todas.length) {
+            console.error('  [ERRO] ' + relatorioDeFalha(resultados));
+            process.exitCode = 1;
+        }
+
         console.log('\n  (dry-run: nada foi gravado)\n');
         return;
     }
@@ -1408,28 +1679,49 @@ async function principal() {
            a coleta nao foi-sucesso. O codigo de saida diferente de zero
            faz a workflow do GitHub marcar o job como falha, em vez de
            deixar o preco velho no ar fingindo que deu tudo certo. */
-        const comErro = resultados.filter(resultado => resultado.erro);
-        const relatorio = comErro.length
-            ? comErro.map(resultado =>
-                (resultado.nome || resultado.fonte || 'fonte') + ': ' + resultado.erro).join(' | ')
-            : 'as fontes nao devolveram nenhuma cotacao';
-
-        console.error('  [ERRO] Nada para gravar. ' + relatorio);
+        console.error('  [ERRO] Nada para gravar. ' + relatorioDeFalha(resultados));
         console.error('  As fontes continuam com o que ja estava no ar.\n');
 
-        if (comErro.length) {
-            process.exitCode = 1;
-        }
+        /* Todas as fontes falharam ou voltaram vazias: a coleta nao
+           deu certo, mesmo que nenhuma delas tenha registrado um
+           erro. O codigo de saida tem de refletir isso. */
+        process.exitCode = 1;
 
         return;
     }
 
     const credencial = await tokenAdmin();
 
-    const gravadas = await gravarCotacoes(credencial, todas);
+    /* O que já está no ar é lido antes da gravação: as cotações que
+       já estão publicadas continuam publicadas (o preço muda, mas o
+       que está no ar continua no ar) e as novas entram com
+       publicado=false, para só entrarem no ar depois que a trava de
+       lote passar. */
+    const publicacao = await publicacaoExistente(credencial, resultados.map(resultado => resultado.fonte));
+
+    if (!publicacao) {
+        console.log('  [AVISO] Nao foi possivel ler as cotacoes que ja estao no ar: ' +
+            'as cotacoes novas entram no ar sem a trava de lote parcial.');
+    }
+
+    const gravadas = await gravarCotacoes(credencial, todas, publicacao);
     console.log('  Gravadas no banco: ' + gravadas + ' cotacao(oes).');
 
-    if (!MANTER_ANTIGAS) {
+    if (MANTER_ANTIGAS) {
+        /* Com --manter-antigas nada sai do ar, mas o que foi
+           coletado entra: as cotacoes novas tambem sao publicadas
+           (e nenhuma trava segura o lote). */
+        for (const resultado of resultados) {
+            if (resultado.erro) continue;
+
+            const publicadas = await publicarLote(credencial, resultado);
+
+            if (publicadas) {
+                console.log('  ' + resultado.nome + ': ' + publicadas +
+                    ' cotacao(oes) publicada(s).');
+            }
+        }
+    } else {
         for (const resultado of resultados) {
             if (resultado.erro) continue;
 
@@ -1441,9 +1733,25 @@ async function principal() {
                * Nesse caso nada sai do ar: as cotacoes antigas ficam
                * com o horario delas ate a proxima coleta completa. */
             const publicadas = await contarPublicadas(credencial, resultado.fonte);
-            const minimo = Math.floor(publicadas * FRAZAO_LOTE_PARCIAL);
 
-            const loteParcial = publicadas > 0 && resultado.itens.length < minimo;
+            /* -1 quer dizer que a contagem falhou: o numero e
+               desconhecido. Comparar -1 com o tamanho do lote daria
+               sempre verdadeira (qualquer numero e maior que -1) e a
+               trava decidiria errado. Com a contagem desconhecida a
+               verificacao e pulada, e o lote segue como veio. */
+            const contagemDesconhecida = publicadas < 0;
+
+            let loteParcial = false;
+
+            if (contagemDesconhecida) {
+                console.log('  [AVISO] ' + resultado.nome +
+                    ': nao foi possivel contar as cotacoes publicadas; ' +
+                    'a trava de lote parcial nao foi aplicada.');
+            } else {
+                const minimo = Math.floor(publicadas * FRAZAO_LOTE_PARCIAL);
+
+                loteParcial = publicadas > 0 && resultado.itens.length < minimo;
+            }
 
             if (loteParcial || resultado.parcial) {
                 const motivo = loteParcial
@@ -1454,7 +1762,18 @@ async function principal() {
                     ': as cotacoes antigas foram mantidas no ar.';
 
                 console.log('  ' + resultado.nome + ': ' + resultado.mensagem);
+                console.log('  ' + resultado.nome +
+                    ': as cotacoes novas ficaram fora do ar (publicado=false).');
                 continue;
+            }
+
+            /* O lote passou: so agora as cotacoes novas entram no ar,
+               e so as linhas deste lote. */
+            const publicadasAgora = await publicarLote(credencial, resultado);
+
+            if (publicadasAgora) {
+                console.log('  ' + resultado.nome + ': ' + publicadasAgora +
+                    ' cotacao(oes) publicada(s).');
             }
 
             const despublicadas = await despublicarAntigas(credencial, resultado.fonte, resultado.itens);

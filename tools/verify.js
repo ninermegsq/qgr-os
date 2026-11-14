@@ -26,7 +26,115 @@ const KNOWN_CONFIG_KEYS = [
 ];
 
 /* Padrão de chave secreta do Supabase (nunca deve aparecer no projeto) */
-const SECRET_PATTERN = /(sb_secret_[A-Za-z0-9_-]{10,}|service_role[\s_-]*key\s*[:=]\s*['"][A-Za-z0-9._-]{20,})/i;
+const SECRET_PATTERN = /(sb_secret_[A-Za-z0-9_-]{10,}|service_role[\s_-]*key\s*[:=]\s*['"][A-Za-z0-9._-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/i;
+
+/* Regras da varredura de segredos. Cada regra tem um nome: o relatorio
+   mostra o caminho do arquivo e a regra que disparou, NUNCA o valor
+   encontrado (o valor fica no terminal de quem commitar). */
+const REGRAS_SEGREDO = [
+    {
+        nome: 'chave sb_secret_ do Supabase',
+        padrao: /sb_secret_[A-Za-z0-9_-]{10,}/i
+    },
+    {
+        nome: 'chave service_role com aspas',
+        padrao: /service_role[\s_-]*key\s*[:=]\s*['"][A-Za-z0-9._-]{20,}/i
+    },
+    {
+        nome: 'JWT do service_role',
+        padrao: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
+        jwt: true
+    },
+    {
+        /* Valor literal sem aspas (ou com aspas) depois do nome da variavel.
+           O negative lookahead ignora o que NAO e segredo: a referencia
+           process.env.X, a interpolacao ${{ secrets.X }} do GitHub e a
+           leitura $(...) de outra variavel. */
+        nome: 'service_role com valor literal',
+        padrao: /(?:service[_-]?role(?:[_-]?key)?|SUPABASE_SERVICE_ROLE)\s*[:=]\s*['"]?\s*(?!\$\{|\$\(|\(|process\.env)[A-Za-z0-9._~+/=-]{20,}/i
+    }
+];
+
+/* A chave publica do Supabase (sb_publishable_...) nao e segredo: ela
+   vai no navegador de proposito, e o mesmo vale para a chave anon
+   antiga (um JWT com papel "anon"). Um JWT so e acusado quando o
+   payload diz que o papel e service_role - ou quando o payload nao
+   abre, porque ai nao ha como provar que a chave e publica. */
+function jwtEhSegredo(token) {
+    const payload = String(token).split('.')[1] || '';
+    let base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+
+    while (base64.length % 4 !== 0) base64 += '=';
+
+    try {
+        const dados = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
+        const papel = String(dados.role || '').toLowerCase();
+
+        if (papel && papel !== 'service_role') return false;
+        return true;
+    } catch (erro) {
+        return true;
+    }
+}
+
+/* Devolve o nome da primeira regra de segredo que dispara no texto
+   (null quando o texto esta limpo). */
+function regraDeSegredo(conteudo) {
+    let nomeDaRegra = null;
+
+    REGRAS_SEGREDO.forEach(regra => {
+        if (nomeDaRegra) return;
+
+        const padrao = new RegExp(regra.padrao.source, regra.padrao.flags.indexOf('g') === -1 ? regra.padrao.flags + 'g' : regra.padrao.flags);
+        let achado;
+
+        while ((achado = padrao.exec(conteudo)) !== null) {
+            if (regra.jwt && !jwtEhSegredo(achado[0])) continue;
+            nomeDaRegra = regra.nome;
+            break;
+        }
+    });
+
+    return nomeDaRegra;
+}
+
+/* Arquivo de ambiente (.env, .env.local, .env.*): nao tem extensao
+   conhecida, entao entra na varredura por nome de arquivo. */
+const ARQUIVO_AMBIENTE = /^\.env(\..+)?$/i;
+
+/* Varredura recursiva do projeto. Devolve a lista de achados, cada um
+   com o caminho do arquivo e o nome da regra que disparou - NUNCA o
+   valor do segredo. node_modules e .git ficam de fora. */
+function varrerSegredos(diretorio, profundidade) {
+    const achados = [];
+
+    if (profundidade > 4) return achados;
+
+    fs.readdirSync(diretorio, { withFileTypes: true }).forEach(entrada => {
+        const completo = path.join(diretorio, entrada.name);
+
+        if (entrada.name === 'node_modules' || entrada.name === '.git') return;
+
+        if (entrada.isDirectory()) {
+            achados.push.apply(achados, varrerSegredos(completo, profundidade + 1));
+            return;
+        }
+
+        /* Os arquivos de ambiente (.env, .env.local, .env.*) nao tem
+           extensao conhecida: entram pelo nome. */
+        const arquivoAmbiente = ARQUIVO_AMBIENTE.test(entrada.name);
+
+        if (!arquivoAmbiente && !/\.(js|ts|html|css|json|sql|toml|md|txt|yml|yaml)$/i.test(entrada.name)) return;
+
+        const regra = regraDeSegredo(fs.readFileSync(completo, 'utf8'));
+
+        if (regra) {
+            achados.push({ arquivo: path.relative(ROOT, completo), regra: regra });
+        }
+    });
+
+    return achados;
+}
 
 function read(relativePath) {
     return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
@@ -691,32 +799,61 @@ if (!/SUPABASE_ANON_KEY/.test(edgeFunction)) {
     errors.push('Edge Function sem a leitura da SUPABASE_ANON_KEY');
 }
 
+/* ---------- 22b. Edge Functions: como elas precisam ser escritas ----------
+
+   Duas armadilhas quebram a funcao no deploy e so se descobrem olhando a
+   resposta da API (ambas foram vividas em 14/11/2026):
+
+   1. Import remoto. A saida para a internet esta bloqueada neste
+      projeto: o deploy responde HTTP 201 e a funcao morre no boot com
+      BOOT_ERROR. O mesmo acontece com "jsr:@std/http@1/serve".
+      As duas funcoes usam Deno.serve, sem dependencia externa.
+
+   2. A Management API grava o corpo como texto puro. Se o body for
+      base64, o arquivo fica gravado como o texto do base64 e a funcao
+      morre no boot com BOOT_ERROR tambem. */
+['noticias', 'cotacoes-trigger'].forEach(nome => {
+    const fonte = read(`supabase/functions/${nome}/index.ts`);
+
+    if (/^\s*import\s+.*from\s+["']https?:\/\//m.test(fonte)) {
+        errors.push(`Edge Function ${nome} com import remoto: a saida para a internet esta bloqueada e a funcao morre no boot (BOOT_ERROR). Use Deno.serve`);
+    }
+
+    if (!/Deno\.serve\s*\(/.test(fonte)) {
+        errors.push(`Edge Function ${nome} sem Deno.serve: sem import remoto, o servidor HTTP tem que ser o proprio Deno`);
+    }
+
+    /* A regra do "serve(" olha so as linhas de codigo: o comentario que
+       explica a troca ainda cita o import antigo, e ele nao deve contar
+       como chamada. */
+    const linhasDeCodigo = fonte
+        .split('\n')
+        .filter(linha => !/^\s*(\/\/|\*|\/\*)/.test(linha))
+        .join('\n');
+
+    /* O padrao exige que o "serve" NAO seja precedido por ponto: assim
+       o Deno.serve (que e o certo) nao confunde com a chamada solta
+       "serve(...)" do import antigo de deno.land. */
+    if (/(^|[^.\w])serve\s*\(async\s*\(request/.test(linhasDeCodigo)) {
+        errors.push(`Edge Function ${nome} ainda chamando serve(): esse era o import remoto de deno.land`);
+    }
+});
+
 /* ---------- 23. Nenhuma chave secreta no projeto ---------- */
 
-function varrerSegredos(diretorio, profundidade) {
-    if (profundidade > 4) return;
+/* A varredura completa (definida no topo do arquivo) acha os segredos
+   em todo o projeto, inclusive nos arquivos .env. O resultado fica
+   guardado aqui para a secao 33 detalhar arquivo por arquivo. */
+const segredosEncontrados = varrerSegredos(ROOT, 0);
 
-    fs.readdirSync(diretorio, { withFileTypes: true }).forEach(entrada => {
-        const completo = path.join(diretorio, entrada.name);
+segredosEncontrados.forEach(achado => {
+    /* So o caminho e o nome da regra: o valor do segredo nunca
+       aparece no relatorio. */
+    errors.push('Possivel chave secreta em ' + achado.arquivo +
+        ' (regra: ' + achado.regra + ')');
+});
 
-        if (entrada.name === 'node_modules' || entrada.name === '.git') return;
-
-        if (entrada.isDirectory()) {
-            varrerSegredos(completo, profundidade + 1);
-            return;
-        }
-
-        if (!/\.(js|ts|html|css|json|sql|toml|md|txt|yml|yaml)$/i.test(entrada.name)) return;
-
-        const conteudo = fs.readFileSync(completo, 'utf8');
-        if (SECRET_PATTERN.test(conteudo)) {
-            errors.push('Possivel chave secreta em ' + path.relative(ROOT, completo));
-        }
-    });
-}
-
-varrerSegredos(ROOT, 0);
-notes.push('Nenhuma chave secreta (service role / sb_secret_) no projeto');
+notes.push('Nenhuma chave secreta (service role / sb_secret_ / JWT) no projeto');
 
 /* ---------- 24. robots.txt bloqueia o painel ---------- */
 if (!/Disallow:\s*\/admin\/?/i.test(robots)) {
@@ -1383,11 +1520,22 @@ if (!/process\.exitCode\s*=\s*1/.test(read('tools/coletar-cotacoes.js'))) {
 notes.push('Travas anti-regressao: CSV de lead sem formula, titulo de 220, ordem estavel e noindex da noticia');
 
 /* O dia da cota diaria de anuncios precisa ser o dia do site (Mato
-   Grosso, UTC-4), nao o dia UTC do Postgres. */
+   Grosso, UTC-4), nao o dia UTC do Postgres.
+
+   O fuso e o DESLOCAMENTO FIXO de -4 horas, pelo mesmo motivo que o
+   JavaScript do site usa FUSO_QG = -4: o tzdata do Postgres 17 do
+   Supabase nao conhece o nome 'America/Mato_Grosso' (a zona foi
+   renomeada para 'America/Cuiaba' quando o estado aboliu o horario
+   de verao), e o erro so aparece quando a consulta e executada. */
 const cotaFuso = read('supabase/migrations/20261113120000_qg_dia_cota_anuncios_fuso_site.sql');
 
-if (cotaFuso.indexOf("AT TIME ZONE 'America/Mato_Grosso'") === -1) {
-    errors.push('A migration do dia da cota de anuncios nao usa o fuso do site (America/Mato_Grosso)');
+if (cotaFuso.indexOf("AT TIME ZONE interval '-04:00'") === -1) {
+    errors.push('A migration do dia da cota de anuncios nao usa o deslocamento fixo do site (interval \'-04:00\')');
+}
+/* Nenhum nome de fuso pode sobrar: um nome que o servidor nao
+   reconhece quebra a funcao em tempo de execucao (HTTP 400). */
+if (/AT TIME ZONE\s+'America\//i.test(cotaFuso)) {
+    errors.push('A migration do dia da cota de anuncios ainda usa um nome de fuso (que pode nao existir no tzdata do servidor)');
 }
 /* O comentario da migration explica o problema usando a palavra
    current_date; o que nao pode sobrar e a expressao no SQL. */
@@ -1511,8 +1659,13 @@ const vistaDia = read('supabase/migrations/20261113150000_qg_vistas_dia_site.sql
         errors.push('A migration do dia do site nao recria ' + vista);
     }
 });
-if (vistaDia.indexOf("AT TIME ZONE 'America/Mato_Grosso'") === -1) {
-    errors.push('A migration do dia do site nao usa o fuso do site nas vistas por dia');
+if (vistaDia.indexOf("AT TIME ZONE interval '-04:00'") === -1) {
+    errors.push('A migration do dia do site nao usa o deslocamento fixo do site nas vistas por dia');
+}
+/* Mesmo cuidado: nome de fuso que o servidor pode nao reconhecer
+   quebra a view quando o painel a consulta (HTTP 400). */
+if (/AT TIME ZONE\s+'America\//i.test(vistaDia)) {
+    errors.push('A migration do dia do site ainda usa um nome de fuso nas vistas por dia');
 }
 /* O comentario da migration explica o problema usando date_trunc; o
    que nao pode sobrar e a expressao no SQL. */
@@ -1532,6 +1685,390 @@ if (!/definirMeta\('name',\s*'description'/.test(noticiaJs)) {
 }
 
 notes.push('Materia: meta description atualizada com o resumo da noticia');
+
+/* ---------- 33. Cache busting: o mesmo N em todas as paginas ----------
+   O navegador so recarrega o CSS e o JS quando o numero depois do
+   ?v= muda. Se cada pagina usa um numero diferente (ou se o CSS e o
+   JS usam numeros diferentes dentro da mesma pagina), o visitante
+   fica com uma versao velha em cache. A regra: um unico N para o
+   style.css e para o script.js, o mesmo em todas as paginas
+   publicas. */
+const PAGINAS_CACHE = [
+    'index.html',
+    'noticias.html',
+    'noticia.html',
+    'publicidade.html',
+    'cotacoes.html',
+    '404.html'
+];
+
+function versaoCache(htmlPagina, arquivo) {
+    /* Pega o ?v=N do primeiro link/script do arquivo pedido. Aceita
+       caminho relativo (style.css?v=1) e com barra (./style.css?v=1). */
+    const achado = htmlPagina.match(new RegExp('["\'][^"\']*' + arquivo.replace('.', '\\.') + '\\?v=(\\d+)["\']'));
+
+    return achado ? achado[1] : null;
+}
+
+const versoesCache = [];
+
+PAGINAS_CACHE.forEach(pagina => {
+    let htmlPagina = '';
+
+    try {
+        htmlPagina = read(pagina);
+    } catch (erro) {
+        errors.push('Nao foi possivel ler ' + pagina + ' para conferir o cache busting');
+        return;
+    }
+
+    const versaoCss = versaoCache(htmlPagina, 'style.css');
+    const versaoJs = versaoCache(htmlPagina, 'script.js');
+
+    if (versaoCss === null) {
+        errors.push(pagina + ' sem ?v= no style.css (o navegador vai servir a versao antiga em cache)');
+    }
+
+    if (versaoJs === null) {
+        errors.push(pagina + ' sem ?v= no script.js (o navegador vai servir a versao antiga em cache)');
+    }
+
+    /* Dentro da mesma pagina o CSS e o JS tem de usar o mesmo N. */
+    if (versaoCss !== null && versaoJs !== null && versaoCss !== versaoJs) {
+        errors.push(pagina + ' com versoes diferentes: style.css?v=' + versaoCss +
+            ' e script.js?v=' + versaoJs + ' (tem de ser o mesmo N)');
+    }
+
+    versoesCache.push({ pagina: pagina, css: versaoCss, js: versaoJs });
+});
+
+/* E o mesmo N em todas as paginas: se uma ficou para tras, o visitante
+   ve duas versoes do site ao mesmo tempo. */
+function compararEntrePaginas(chave, rotulo) {
+    const valores = versoesCache.filter(item => item[chave] !== null).map(item => item[chave]);
+    const distintas = valores.filter((valor, indice) => valores.indexOf(valor) === indice);
+
+    if (distintas.length > 1) {
+        versoesCache.forEach(item => {
+            if (item[chave] === null) return;
+
+            const outro = versoesCache.find(outroItem => outroItem[chave] !== null && outroItem[chave] !== item[chave]);
+
+            if (!outro) return;
+
+            errors.push(item.pagina + ' com ' + rotulo + '?v=' + item[chave] +
+                ' e ' + outro.pagina + ' com ?v=' + outro[chave] +
+                ' (todas as paginas publicas usam o mesmo N)');
+        });
+    }
+
+    return distintas.length ? distintas[0] : null;
+}
+
+const nCss = compararEntrePaginas('css', 'style.css');
+const nJs = compararEntrePaginas('js', 'script.js');
+
+if (versoesCache.length === PAGINAS_CACHE.length && nCss !== null && nJs !== null && nCss === nJs) {
+    notes.push('Cache busting: style.css e script.js com ?v=' + nCss +
+        ' nas ' + PAGINAS_CACHE.length + ' paginas publicas');
+} else {
+    notes.push('Cache busting: style.css?v=' + (nCss === null ? '?' : nCss) +
+        ' e script.js?v=' + (nJs === null ? '?' : nJs) +
+        ' (o CSS e o JS tem de usar o mesmo N em todas as paginas)');
+}
+
+/* ---------- 34. Varredura reforcada de segredos ----------
+   A secao 23 barra segredo nos arquivos de texto conhecidos. Aqui a
+   varredura e mais larga: ela le TUDO que parece texto (qualquer
+   extensao, menos binarios e arquivos grandes) e aplica as mesmas
+   regras - JWT de service_role, atribuicao sem aspas em arquivo de
+   ambiente e arquivo .env/.env.local/.env.*. Assim um segredo
+   escondido em deploy.sh, .npmrc ou .env.production nao passa.
+   O relatorio traz o caminho do arquivo e o nome da regra que
+   disparou - NUNCA o valor encontrado. node_modules e .git ficam de
+   fora, como na secao 23. */
+const EXTENSAO_BINARIA = /\.(png|jpe?g|gif|webp|bmp|ico|woff2?|ttf|otf|eot|mp4|webm|mp3|wav|ogg|pdf|zip|7z|rar|gz|tar|sqlite|db)$/i;
+const TAMANHO_MAXIMO = 512 * 1024;
+
+function varrerSegredosLargo(diretorio, profundidade) {
+    const achados = [];
+
+    if (profundidade > 6) return achados;
+
+    fs.readdirSync(diretorio, { withFileTypes: true }).forEach(entrada => {
+        const completo = path.join(diretorio, entrada.name);
+
+        if (entrada.name === 'node_modules' || entrada.name === '.git') return;
+
+        if (entrada.isDirectory()) {
+            achados.push.apply(achados, varrerSegredosLargo(completo, profundidade + 1));
+            return;
+        }
+
+        if (EXTENSAO_BINARIA.test(entrada.name)) return;
+
+        let tamanho = 0;
+
+        try {
+            tamanho = fs.statSync(completo).size;
+        } catch (erro) {
+            return;
+        }
+
+        if (tamanho > TAMANHO_MAXIMO) return;
+
+        const conteudo = fs.readFileSync(completo, 'utf8');
+        const regra = regraDeSegredo(conteudo);
+
+        if (regra) {
+            achados.push({ arquivo: path.relative(ROOT, completo), regra: regra });
+        }
+    });
+
+    return achados;
+}
+
+const segredosLargos = varrerSegredosLargo(ROOT, 0);
+const jaApontados = new Set(segredosEncontrados.map(achado => achado.arquivo));
+
+segredosLargos.forEach(achado => {
+    /* O mesmo arquivo nao e apontado duas vezes: a secao 23 ja
+       PEGOU o que estava nos formatos conhecidos. */
+    if (jaApontados.has(achado.arquivo)) return;
+
+    jaApontados.add(achado.arquivo);
+    errors.push('Segredo detectado em ' + achado.arquivo + ' (regra: ' + achado.regra + ')');
+});
+
+if (!segredosLargos.length) {
+    notes.push('Varredura reforcada: nenhum sb_secret_, service_role ou JWT de service_role em nenhum arquivo do projeto');
+} else {
+    notes.push('Varredura reforcada: ' + segredosLargos.length +
+        ' arquivo(s) com segredo possivel (caminho e regra no relatorio, sem o valor)');
+}
+
+/* ---------- 35. As tres migrations de seguranca (160000/170000/180000) ----------
+   Juntas elas fecham tres buracos confirmados ao vivo no banco:
+   o papel anon podia escrever em leads/visitas/administradores; as
+   vistas do painel eram lidas pela chave publica; e os contadores
+   publicos nao tinham teto de chamada. */
+
+const revogaEscrita = read('supabase/migrations/20261113160000_qg_revoga_escrita_anon.sql');
+
+/* A migration revoga as tres tabelas num laco (EXECUTE format), entao
+   o SQL nao traz "REVOKE ... ON public.leads" escrito: traz a lista
+   das tabelas e o formato do comando. As duas pecas sao conferidas. */
+['leads', 'visitas', 'administradores'].forEach(tabela => {
+    if (revogaEscrita.indexOf("'" + tabela + "'") === -1) {
+        errors.push('A migration de revogacao de escrita nao cobre a tabela ' + tabela);
+    }
+});
+
+if (!/REVOKE ALL ON public\.%I FROM anon/.test(revogaEscrita)) {
+    errors.push('A migration de revogacao de escrita nao revoga o papel anon');
+}
+if (!/REVOKE ALL ON public\.%I FROM PUBLIC/.test(revogaEscrita)) {
+    errors.push('A migration de revogacao de escrita nao revoga PUBLIC (o privilegio padrao)');
+}
+
+/* O painel continua lendo e apaga o que precisa apagar. */
+if (!/GRANT SELECT ON public\.%I TO authenticated/.test(revogaEscrita)) {
+    errors.push('A migration de revogacao de escrita tirou a leitura do painel');
+}
+if (!/GRANT SELECT, INSERT, UPDATE, DELETE ON public\.administradores TO authenticated/.test(revogaEscrita)) {
+    errors.push('A migration de revogacao de escrita tirou o CRUD do painel em administradores');
+}
+if (!/GRANT UPDATE, DELETE ON public\.leads TO authenticated/.test(revogaEscrita)) {
+    errors.push('A migration de revogacao de escrita tirou a edicao/exclusao de leads do painel');
+}
+if (!/GRANT DELETE ON public\.visitas TO authenticated/.test(revogaEscrita)) {
+    errors.push('A migration de revogacao de escrita tirou a limpeza de visitas do painel');
+}
+
+notes.push('Papel anon: sem escrita em leads, visitas e administradores');
+
+/* ---- 35b. A RPC do painel de anuncios e restrita ao admin ---- */
+
+const rpcPainel = read('supabase/migrations/20261113170000_qg_rpc_painel_anuncios.sql');
+
+if (!/FUNCTION public\.anuncios_painel_desempenho/.test(rpcPainel)) {
+    errors.push('A migration da RPC do painel de anuncios nao cria anuncios_painel_desempenho');
+}
+if (!/public\.e_admin\(\)/.test(rpcPainel)) {
+    errors.push('A RPC anuncios_painel_desempenho nao checa e_admin() (qualquer conta leria o painel)');
+}
+if (!/REVOKE ALL ON FUNCTION public\.anuncios_painel_desempenho\(\) FROM PUBLIC/.test(rpcPainel)) {
+    errors.push('A RPC anuncios_painel_desempenho nao revoga o privilegio padrao PUBLIC');
+}
+if (!/REVOKE ALL ON FUNCTION public\.anuncios_painel_desempenho\(\) FROM anon/.test(rpcPainel)) {
+    errors.push('A RPC anuncios_painel_desempenho nao revoga o papel anon');
+}
+/* A view publica nao pode entregar o contato do anunciante. */
+const blocoViewPublica = rpcPainel.slice(rpcPainel.indexOf('CREATE VIEW public.vw_anuncios_desempenho_publica'));
+if (blocoViewPublica.indexOf('autorizacao') !== -1) {
+    errors.push('A view vw_anuncios_desempenho_publica entrega a coluna autorizacao (o contato do anunciante)');
+}
+if (!/security_invoker\s*=\s*true/.test(blocoViewPublica)) {
+    errors.push('A view vw_anuncios_desempenho_publica nao usa security_invoker (ignora a RLS)');
+}
+/* Quem tem conta volta a ver as noticias e os anuncios publicados. */
+if (!/CREATE POLICY noticias_leitura_publica[\s\S]*?FOR SELECT TO anon, authenticated/.test(rpcPainel)) {
+    errors.push('A migration da RPC do painel nao devolve noticias_leitura_publica para o papel authenticated');
+}
+
+notes.push('RPC do painel de anuncios: so administrador, e a view publica sem a coluna autorizacao');
+
+/* ---- 35c. Limite nas chamadas publicas e lead duplicado atomico ---- */
+
+const limites = read('supabase/migrations/20261113180000_qg_limites_chamadas_publicas.sql');
+
+/* As quatro RPCs de contagem precisam do parametro de sessao e do
+   teto. Sem o parametro, o banco nao tem chave para contar. */
+const RPCS_CONTAGEM = [
+    'registrar_impressao_anuncio',
+    'clicar_anuncio',
+    'clicar_noticia',
+    'registrar_visualizacao_noticia'
+];
+
+RPCS_CONTAGEM.forEach(nome => {
+    if (!new RegExp('FUNCTION public\\.' + nome + '\\(\\s*p_id uuid,\\s*p_sessao_id text DEFAULT NULL').test(limites)) {
+        errors.push('A migration de limites nao da o parametro opcional p_sessao_id a ' + nome);
+    }
+    /* A sobrecarga antiga (um argumento) precisa sair: senao o
+       PostgREST pode resolver a chamada para ela, que nao tem
+       limite nenhum. */
+    if (!new RegExp('DROP FUNCTION IF EXISTS public\\.' + nome + '\\(uuid\\)').test(limites)) {
+        errors.push('A migration de limites nao remove a sobrecarga antiga (sem limite) de ' + nome);
+    }
+});
+
+if (!/CREATE TABLE IF NOT EXISTS public\.qg_limites_chamadas/.test(limites)) {
+    errors.push('A migration de limites nao cria a tabela do contador (qg_limites_chamadas)');
+}
+/* O contador nao pode ser o `visitas`: ali mora a cota do analytics. */
+if (/FROM public\.visitas[\s\S]{0,200}interval '1 minute'/.test(limites)) {
+    errors.push('A migration de limites ainda conta o limite em public.visitas (a cota do analytics)');
+}
+
+/* A guarda do lead duplicado precisa ser atomica e comparar o
+   telefone por digitos. */
+if (!/pg_advisory_xact_lock/.test(limites)) {
+    errors.push('A migration de limites nao trava a transacao na guarda de lead duplicado');
+}
+if (!/regexp_replace/.test(limites)) {
+    errors.push('A migration de limites nao normaliza o telefone por digitos na guarda de duplicidade');
+}
+if (!/CREATE INDEX IF NOT EXISTS leads_email_telefone_criado_em_idx/.test(limites)) {
+    errors.push('A migration de limites nao cria o indice da busca de duplicidade de leads');
+}
+/* O INSERT precisa ter o mesmo numero de valores que de colunas. */
+const blocoLead = limites.slice(limites.indexOf('INSERT INTO public.leads'));
+if (blocoLead.indexOf('p_utm_content') === -1) {
+    errors.push('A migration de limites perdeu o utm_content no INSERT de leads');
+}
+
+/* A data de publicacao informada no INSERT precisa ser respeitada:
+   a coluna fica nullable (sem DEFAULT) e o trigger so preenche quando
+   nao veio nada. */
+if (!/ALTER COLUMN publicado_em DROP DEFAULT/.test(limites)) {
+    errors.push('A migration de limites nao tira o DEFAULT de publicado_em (o trigger nao consegue distinguir a data informada)');
+}
+if (!/ALTER COLUMN publicado_em DROP NOT NULL/.test(limites)) {
+    errors.push('A migration de limites nao tira o NOT NULL de publicado_em (o DEFAULT preenche antes do trigger)');
+}
+
+/* Quem tem conta volta a ver os anuncios publicados. */
+if (!/CREATE POLICY anuncios_leitura_publica[\s\S]*?FOR SELECT TO anon, authenticated/.test(limites)) {
+    errors.push('A migration de limites nao devolve anuncios_leitura_publica para o papel authenticated');
+}
+
+notes.push('Contadores publicos com teto por sessao, lead duplicado atomico e data de publicacao respeitada');
+
+/* ---- 35d. O cliente passa o id da sessao para os contadores ---- */
+
+/* Sem o id da sessao, o banco nao tem chave para aplicar o teto: o
+   limite so vale para o site novo. */
+RPCS_CONTAGEM.forEach(nome => {
+    /* Cada RPC precisa da sessao. A sessao pode estar de duas formas:
+         a) na propria chamada (o caso direto, com o `p_sessao_id` no
+            objeto que vai para a RPC);
+         b) no helper `contarComSessao` (que monta o payload com a
+            sessao e cai para a chamada simples quando o banco ainda
+            nao conhece o parametro).
+       No caso (b) o `p_sessao_id` fica na definicao do helper, longe
+       do ponto de chamada: por isso a verificacao olha o helper como
+       um todo, e nao uma janela de caracteres em volta da chamada. */
+    const chamadaDireta = new RegExp('rpc\\(\\s*[\'"]' + nome + '[\'"][\\s\\S]{0,300}?p_sessao_id');
+    const chamadaPeloHelper = new RegExp('contarComSessao\\(\\s*[\'"]' + nome + '[\'"]');
+    const helperTemSessao = /function contarComSessao[\s\S]{0,1200}?p_sessao_id/.test(js);
+
+    const temSessao = chamadaDireta.test(js) || chamadaDireta.test(noticiaJs) ||
+        (chamadaPeloHelper.test(js) && helperTemSessao);
+
+    if (!temSessao) {
+        errors.push('O cliente nao manda p_sessao_id para a RPC ' + nome + ' (o limite do banco nao se aplica)');
+    }
+});
+
+/* O noticia.js roda num IIFE separado: ele precisa do id da sessao
+   por um caminho proprio. */
+if (!/window\.QGAnalytics/.test(js)) {
+    errors.push('script.js nao publica o id da sessao (window.QGAnalytics) para o noticia.js');
+}
+if (!/qg_sessao/.test(noticiaJs)) {
+    errors.push('noticia.js nao le o id da sessao (qg_sessao) para contar a visualizacao');
+}
+
+notes.push('Cliente: os contadores mandam o id da sessao (o teto do banco se aplica)');
+
+/* ---- 35d-2. O cliente sobrevive ao banco sem a migration ----
+   A RPC com `p_sessao_id` so existe depois da migration
+   20261113180000. Sem o recuo, o PostgREST responde PGRST202 e o
+   contador (clique, impressão, visualização) DEIXA de funcionar
+   enquanto a migration nao for aplicada. O recuo refaz a chamada
+   sem a sessão. */
+if (!/PGRST202/.test(js) || !/rpcComSessaoSemRecuo/.test(js)) {
+    errors.push('script.js nao tem recuo para o banco sem p_sessao_id (o contador para de funcionar)');
+}
+if (!/PGRST202/.test(noticiaJs)) {
+    errors.push('noticia.js nao tem recuo para o banco sem p_sessao_id (a visualizacao para de contar)');
+}
+
+notes.push('Cliente: recuo quando o banco ainda nao conhece p_sessao_id (o contador continua funcionando)');
+
+/* ---- 35e. O init de referencia tambem precisa das protecoes ---- */
+
+if (!/REVOKE ALL ON public\.vw_painel_resumo FROM PUBLIC/.test(migration)) {
+    errors.push('A migration inicial nao revoga vw_painel_resumo de PUBLIC (um banco novo vaza o painel)');
+}
+if (!/REVOKE ALL ON public\.vw_leads_por_dia FROM PUBLIC/.test(migration)) {
+    errors.push('A migration inicial nao revoga vw_leads_por_dia de PUBLIC (um banco novo vaza o painel)');
+}
+if (!/REVOKE ALL ON public\.vw_visitas_por_dia FROM PUBLIC/.test(migration)) {
+    errors.push('A migration inicial nao revoga vw_visitas_por_dia de PUBLIC (um banco novo vaza o painel)');
+}
+if (!/REVOKE ALL ON public\.vw_visitas_por_tipo FROM PUBLIC/.test(migration)) {
+    errors.push('A migration inicial nao revoga vw_visitas_por_tipo de PUBLIC (um banco novo vaza o painel)');
+}
+if (/publicado_em timestamptz NOT NULL DEFAULT now\(\)/.test(migration)) {
+    errors.push('A migration inicial mantem publicado_em NOT NULL DEFAULT now() (a data informada no INSERT e sempre sobrescrita)');
+}
+
+/* ---- 35f. As vistas recriadas nao podem reabrir o acesso ---- */
+
+const vistaDiaRecriada = read('supabase/migrations/20261113150000_qg_vistas_dia_site.sql');
+
+['vw_leads_por_dia', 'vw_visitas_por_dia'].forEach(vista => {
+    if (!new RegExp('REVOKE ALL ON public\\.' + vista + ' FROM PUBLIC').test(vistaDiaRecriada)) {
+        errors.push('A migration das vistas do dia nao revoga ' + vista + ' de PUBLIC');
+    }
+    if (!new RegExp('REVOKE ALL ON public\\.' + vista + ' FROM anon').test(vistaDiaRecriada)) {
+        errors.push('A migration das vistas do dia nao revoga ' + vista + ' do papel anon');
+    }
+});
+
+notes.push('Init de referencia e vistas do dia: privilegios revoked para anon e PUBLIC');
 
 /* ---------- Relatorio ---------- */
 function report() {

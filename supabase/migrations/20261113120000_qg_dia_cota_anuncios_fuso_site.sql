@@ -16,11 +16,28 @@
  *   isto e: a data UTC com 4 horas subtracted.
  *
  * REGRA NO BANCO
- *   (now() AT TIME ZONE 'America/Mato_Grosso')::date
- *   O Postgres conhece o fuso do site: 'America/Mato_Grosso' e
- *   UTC-4 o ano inteiro (o Brasil nao aplica horario de verao desde
- *   2019). Nao usamos 'America/Sao_Paulo', que e UTC-3 no horario de
+ *   (now() AT TIME ZONE interval '-04:00')::date
+ *   O deslocamento fixo de -4 horas e o mesmo que o JavaScript do
+ *   site usa (FUSO_QG = -4 * 60 * 60 * 1000 em script.js, noticia.js,
+ *   cotacoes.js e admin/admin.js). Mato Grosso e UTC-4 o ano inteiro
+ *   (o Brasil nao aplica horario de verao desde 2019), entao o
+ *   deslocamento fixo equivale ao fuso nomeado.
+ *
+ *   POR QUE NAO USAR O NOME DO FUSO
+ *   A expressao usava 'America/Mato_Grosso'. Esse nome NAO existe no
+ *   tzdata do Postgres 17 do Supabase: a zona foi renomeada para
+ *   'America/Cuiaba' quando Mato Grosso aboliu o horario de verao.
+ *   O erro nao aparece ao criar a funcao ou a view — so quando a
+ *   consulta e executada:
+ *       ERROR: 22023: time zone "America/Mato_Grosso" not recognized
+ *   E o efeito e silencioso no painel: a view devolvia HTTP 400 e o
+ *   rodizio de anuncios (anuncios_elegiveis) parava de entregar
+ *   anuncio, porque o painel cai no fallback quando a view falha.
+ *   'America/Sao_Paulo' tambem nao serve: e UTC-3 no horario de
  *   verao e trocaria o dia no meio da noite.
+ *
+ *   O deslocamento fixo nao depende do tzdata do servidor: o mesmo
+ *   resultado em qualquer ambiente, e igual ao que o site calcula.
  *
  * ONDE O DIA E USADO
  *   1. anuncios_elegiveis: a cota diaria decide se o anuncio ainda
@@ -73,7 +90,7 @@ AS $$
     FROM public.anuncios a
     LEFT JOIN public.anuncio_impressoes_diarias d
            ON d.anuncio_id = a.id
-          AND d.dia = (now() AT TIME ZONE 'America/Mato_Grosso')::date
+          AND d.dia = (now() AT TIME ZONE interval '-04:00')::date
     WHERE a.publicado = true
       AND a.posicao = p_posicao
       AND (p_formato IS NULL OR a.formato = p_formato)
@@ -93,7 +110,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    v_dia date := (now() AT TIME ZONE 'America/Mato_Grosso')::date;
+    v_dia date := (now() AT TIME ZONE interval '-04:00')::date;
 BEGIN
     UPDATE public.anuncios
     SET impressoes = impressoes + 1
@@ -148,7 +165,7 @@ SELECT
 FROM public.anuncios a
 LEFT JOIN public.anuncio_impressoes_diarias d
        ON d.anuncio_id = a.id
-      AND d.dia = (now() AT TIME ZONE 'America/Mato_Grosso')::date;
+      AND d.dia = (now() AT TIME ZONE interval '-04:00')::date;
 
 GRANT SELECT ON public.vw_anuncios_desempenho TO authenticated;
 
@@ -198,6 +215,6 @@ SELECT
 FROM public.anuncios a
 LEFT JOIN public.anuncio_impressoes_diarias d
        ON d.anuncio_id = a.id
-      AND d.dia = (now() AT TIME ZONE 'America/Mato_Grosso')::date;
+      AND d.dia = (now() AT TIME ZONE interval '-04:00')::date;
 
 GRANT SELECT ON public.vw_anuncios_desempenho_publica TO authenticated;

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "serve": "node server.js",
-    "check": "node --check script.js && node --check noticia.js && node --check cotacoes.js && node --check classificacao-cotacoes.js && node --check site.config.js && node --check supabase-api.js && node --check admin/admin.js && node --check server.js && node --check tools/coletar-cotacoes.js && node --check tools/visual-check.js && node --check tools/test-supabase.js && node tools/verify.js && node tools/test-config.js && node tools/test-classificacao.js",
+    "check": "node --check script.js && node --check noticia.js && node --check cotacoes.js && node --check classificacao-cotacoes.js && node --check site.config.js && node --check supabase-api.js && node --check admin/admin.js && node --check server.js && node --check tools/coletar-cotacoes.js && node --check tools/visual-check.js && node --check tools/test-supabase.js && node --check tools/build-sitemap.js && node --check tools/test-server.js && node --check tools/probe-api.js && node --check tools/verify.js && node --check tools/test-config.js && node --check tools/test-classificacao.js && node tools/verify.js && node tools/test-config.js && node tools/test-classificacao.js",
     "check:all": "npm run check && npm run test:server && npm run visual",
     "verify": "node tools/verify.js",
     "sitemap": "node tools/build-sitemap.js",
@@ -19,10 +19,14 @@
     "cotacoes:coletar": "node tools/coletar-cotacoes.js",
     "cotacoes:simular": "node tools/coletar-cotacoes.js --dry-run",
     "visual": "node tools/visual-check.js",
+    "audit:anuncios": "node tools/audit-motor-anuncios.js",
+    "sonda": "node tools/sonda-estado.js",
+    "prova:contadores": "node tools/prova-contadores.js",
     "git": "git",
     "gh": "gh"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "puppeteer-core": "^24.0.0"
   },
   "engines": {

@@ -21,7 +21,19 @@
 //                         o que está publicado)
 // =====================================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// ---------------------------------------------------------------------
+// SEM IMPORT REMOTO (de proposito)
+//   A versao anterior usava:
+//       import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+//   Nesse projeto a saida para a internet esta bloqueada: a funcao
+//   subia no deploy (HTTP 201) mas morria no boot com
+//       {"code":"BOOT_ERROR","message":"Function failed to start"}
+//   porque nao conseguia baixar o modulo. O mesmo aconteceu com
+//   "jsr:@std/http@1/serve".
+//   Por isso o servidor HTTP fica aqui, com o que o proprio Deno
+//   oferece (Deno.serve). Sem dependencia externa, sem download em
+//   tempo de boot.
+// ---------------------------------------------------------------------
 
 const CATEGORIAS = [
   "Soja",
@@ -61,7 +73,7 @@ function texto(valor: unknown): string {
   return String(valor ?? "");
 }
 
-serve(async (request: Request) => {
+Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
